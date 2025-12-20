@@ -10,7 +10,7 @@ If you want to make contribute to the project, please let me know.
 
 ### Traditional Chinese
 
-Progress: 2 / 14
+Progress: 3 / 14
 
 - [ ] packages
   - [ ] core.mdx
@@ -19,7 +19,7 @@ Progress: 2 / 14
 - [ ] api.mdx
 - [x] basics.mdx
 - [ ] codecs.mdx
-- [ ] ecosystem.mdx
+- [x] ecosystem.mdx
 - [ ] error-customization.mdx
 - [ ] error-formatting.mdx
 - [x] index.mdx
