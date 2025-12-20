@@ -22,7 +22,7 @@ Progress: 0 / 14
 - [ ] ecosystem.mdx
 - [ ] error-customization.mdx
 - [ ] error-formatting.mdx
-- [ ] index.mdx
+- [x] index.mdx
 - [ ] json-schema.mdx
 - [ ] library-authors.mdx
 - [ ] metadata.mdx

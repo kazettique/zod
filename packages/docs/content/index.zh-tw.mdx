@@ -1,0 +1,194 @@
+---
+title: "介紹"
+mode: "center"
+description: "Zod 簡介 - 具備靜態型別推論、TypeScript 優先的架構（schema）驗證函式庫"
+---
+
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+import { Tabs } from 'fumadocs-ui/components/tabs';
+
+import { Featured } from '../components/featured';
+import { Platinum } from '../components/platinum';
+import { Gold } from '../components/gold';
+import { Silver } from '../components/silver';
+import { Bronze } from '../components/bronze';
+import { HeroLogo } from '../components/hero-logo';
+
+
+<div className="flex flex-col items-stretch text-center">
+  <HeroLogo />
+  <h1 className="text-3xl font-bold">Zod</h1>
+  <p className="mt-2 mb-1">使用靜態型別推斷的 TypeScript 優先架構驗證<br/>由 <a href="https://x.com/colinhacks">@colinhacks</a>開發</p>
+  <br/>
+  <div  className="flex flex-row flex-wrap justify-center gap-1 py-2">
+    <a className="border-none" href="https://github.com/colinhacks/zod/actions?query=branch%3Amain">
+      <img className="h-[20px] m-0!" src="https://github.com/colinhacks/zod/actions/workflows/test.yml/badge.svg?event=push&branch=main" alt="Zod CI status" />
+    </a>
+    <a className="border-none" href="https://twitter.com/colinhacks" rel="nofollow">
+      <img  className="h-[20px] m-0!" src="https://img.shields.io/badge/created%20by-@colinhacks-4BBAAB.svg" alt="Created by Colin McDonnell" />
+    </a>
+    <a className="border-none" href="https://opensource.org/licenses/MIT" rel="nofollow">
+      <img  className="h-[20px] m-0!" src="https://img.shields.io/github/license/colinhacks/zod" alt="License" />
+    </a>
+    <a className="border-none" href="https://www.npmjs.com/package/zod" rel="nofollow">
+      <img  className="h-[20px] m-0!" src="https://img.shields.io/npm/dw/zod.svg" alt="npm" />
+    </a>
+    <a className="border-none" href="https://github.com/colinhacks/zod" rel="nofollow">
+      <img  className="h-[20px] m-0!" src="https://img.shields.io/github/stars/colinhacks/zod" alt="stars" />
+    </a>
+  </div>
+  <div className="flex flex-row justify-center gap-1">
+    <a href="https://zod.dev">Website</a>
+    <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+    <a href="https://discord.gg/RcG33DQJdf">Discord</a>
+    <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+    <a href="https://twitter.com/colinhacks">𝕏</a>
+    <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+    <a href="https://bsky.app/profile/zod.dev">Bluesky</a>
+    <br />
+  </div>
+</div>
+
+<br/>
+
+{/* <ParamField path="param" type="string">
+  An example of a parameter field
+</ParamField>
+
+<ParamField query="filter" type="string" default="none" required>
+  The filtering command used to sort through the users
+</ParamField>
+
+<ParamField body="user_age" type="integer" default="0" required>
+  The age of the user. Cannot be less than 0
+</ParamField> */}
+
+<div className="mt-5 font-gray-100 mx-auto text-center pt-12">
+  <span className="">
+    Zod 4 已是穩定版本！請詳閱 <a rel="noopener noreferrer" href="/v4" alt="zod 4 release notes">版本發佈通知</a>.
+  </span>
+</div>
+
+<br /><br /><br />
+
+<Featured data={{
+  name: "Jazz",
+  link: "https://jazz.tools/?utm_source=zod",
+  lightImage: "https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png",
+  
+  darkImage: "https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png",
+}} />
+
+
+## 簡介
+
+Zod 是以 TypeScript 為基礎的驗證函式庫。您可以在 Zod 中定義 *架構（schema）*來進行資料驗證，無論資料是簡單的「字串」抑或是複雜的巢狀物件。
+
+```ts
+import * as z from "zod";
+
+const User = z.object({
+  name: z.string(),
+});
+
+// some untrusted data...
+const input = { /* stuff */ };
+
+// the parsed result is validated and type safe!
+const data = User.parse(input);
+
+// so you can use it with confidence :)
+console.log(data.name);
+```
+
+## 特色
+
+- 無任何外部依賴
+- 可在 Node.js 及所有現代瀏覽器環境中運作
+- 體積輕巧：2kb 的核心套件（gzipped 壓縮）
+- 不可變（immutable）API：方法會傳回新的實例
+- 簡潔的介面（interface）
+- 可與 TypeScript 及純 JS 搭配使用
+- 內建 JSON 架構（schema）轉換
+- 廣泛的生態系統
+
+
+## 安裝
+
+
+```sh
+npm install zod
+```
+
+> Zod 也可以在 [jsr.io](https://jsr.io/@zod/zod) 上以 `@zod/zod` 的形式提供安裝。
+
+Zod 提供了一個 MCP 伺服器，可以讓代理用來搜尋 Zod 的文件。若要新增至編輯器，請參考 [這份指南](https://share.inkeep.com/zod/mcp)。另外，Zod 也提供一個 [llms.txt](https://zod.dev/llms.txt) 檔案。
+
+## 環境需求
+
+Zod is tested against *TypeScript v5.5* and later. Older versions may work but are not officially supported.
+Zod 已針對 *TypeScript v5.5* 及更新版本進行測試。較舊的版本可能可以運作，但官方上已不支援。
+
+### TypeScript 嚴格模式（`"strict"`）
+
+You must enable `strict` mode in your `tsconfig.json`. This is a best practice for all TypeScript projects.
+
+```ts
+// tsconfig.json
+{
+  // ...
+  "compilerOptions": {
+    // ...
+    "strict": true
+  }
+}
+```
+
+
+## 生態系統
+
+Zod 擁有一個由函式庫、工具和整合組成的活躍生態系統。請參考 [生態系統頁面](/ecosystem) 以取得支援 Zod 或建立在 Zod 之上的完整函式庫清單。
+
+- [參考參考](/ecosystem?id=resources)
+- [API 函式庫](/ecosystem?id=api-libraries)
+- [表單整合](/ecosystem?id=form-integrations)
+- [Zod 至 X](/ecosystem?id=zod-to-x)
+- [X 至 Zod](/ecosystem?id=x-to-zod)
+- [模擬函式庫](/ecosystem?id=mocking-libraries)
+- [由 Zod 驅動的套件](/ecosystem?id=powered-by-zod)
+
+我也為下列專案做出貢獻，在此特別提出：
+
+- [tRPC](https://trpc.io) - 端對端（End-to-end）型別安全 API，支援 Zod 架構（schema）。
+- 在以鉤子函式為基礎的表單驗證中，使用[Zod 解析器](https://react-hook-form.com/docs/useform#resolver)
+- [zshy](https://github.com/colinhacks/zshy) - 最初作為 Zod 的內部建構工具而創建，是一個無需打包、全套的 TypeScript 函式庫建構工具，由 `tsc` 驅動。
+
+## 贊助商
+
+我們感謝並鼓勵任何層級的贊助。如果您使用 Zod 建立付費產品，請考慮[企業層級](https://github.com/sponsors/colinhacks)。
+
+
+### Platinum
+
+<Platinum />
+
+<br/>
+
+### Gold
+
+<Gold />
+
+<br/>
+
+### Silver
+
+<Silver />
+
+<br/>
+
+### Bronze
+
+<Bronze />
+
+<br />
+
