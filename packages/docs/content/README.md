@@ -10,14 +10,14 @@ If you want to make contribute to the project, please let me know.
 
 ### Traditional Chinese
 
-Progress: 0 / 14
+Progress: 2 / 14
 
 - [ ] packages
   - [ ] core.mdx
   - [ ] mini.mdx
   - [ ] zod.mdx
 - [ ] api.mdx
-- [ ] basics.mdx
+- [x] basics.mdx
 - [ ] codecs.mdx
 - [ ] ecosystem.mdx
 - [ ] error-customization.mdx
