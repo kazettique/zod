@@ -39,15 +39,14 @@ myRegistry.add(mySchema, { description: "A cool schema!" }); // ✅
 myRegistry.add(mySchema, { description: 123 }); // ❌
 ```
 
-> **Special handling for `id`** —  Zod registries treat the `id` property specially. An `Error` will be thrown if multiple schemas are registered with the same `id` value. This is true for all registries, including the global registry.
-> **`id`的特殊處理方式** - Zod註冊處會特殊處理`id`屬性。如果有多個架構以相同的 `id` 值註冊，會產生`Error`。這對所有註冊表都適用，包括全局註冊表。
+> **`id` 的特殊處理方式** - Zod 註冊表會特別處理 `id` 屬性。若有多個架構以相同的 `id` 值註冊，則會產生 `Error`。這對所有註冊表都適用，包括全域註冊表。
 
 
 ### `.register()`
 
-> **Note** — This method is special in that it does not return a new schema; instead, it returns the original schema. No other Zod method does this! That includes `.meta()` and `.describe()` (documented below) which return a new instance.
+> **注意** - 這個方法很特別，它不會回傳一個新的架構；相反地，它會回傳原始的架構。沒有其他 Zod 方法如此！包括 `.meta()` 和 `.describe()`（文件如下），它們會回傳一個新的實例。
 
-Schemas provide a `.register()` method to more conveniently add it to a registry.
+架構提供 `.register()` 方法以便更方便地將其加入註冊表。
 
 ```ts
 const mySchema = z.string();
@@ -56,7 +55,7 @@ mySchema.register(myRegistry, { description: "A cool schema!" });
 // => mySchema
 ```
 
-This lets you define metadata "inline" in your schemas.
+在「內嵌」的架構中定義元資料。
 
 ```ts
 const mySchema = z.object({
@@ -66,7 +65,7 @@ const mySchema = z.object({
 ```
 
 <Callout>
-If a registry is defined without a metadata type, you can use it as a generic "collection", no metadata required.
+若註冊表的定義沒有元資料型別，您可以將它當成一般的「集合」來使用，不需要元資料。
 
 ```ts
 const myRegistry = z.registry();
@@ -77,11 +76,11 @@ myRegistry.add(z.number());
 </Callout>
 
 
-## Metadata
+## 元資料（Metadata）
 
 ### `z.globalRegistry`
 
-For convenience, Zod provides a global registry (`z.globalRegistry`) that can be used to store metadata for JSON Schema generation or other purposes. It accepts the following metadata:
+為了方便起見，Zod 提供了一個全域註冊表（`z.globalRegistry`），可用來儲存元資料，以便產生 JSON Schema 或其他用途。它接受下列元資料：
 
 ```ts
 export interface GlobalMeta {
@@ -93,7 +92,7 @@ export interface GlobalMeta {
 }
 ```
 
-To register some metadata in `z.globalRegistry` for a schema:
+在 `z.globalRegistry` 中為架構註冊一些元資料：
 
 ```ts
 import * as z from "zod";
@@ -106,7 +105,7 @@ const emailSchema = z.email().register(z.globalRegistry, {
 });
 ```
 
-To globally augment the `GlobalMeta` interface, use [*declaration merging*](https://www.typescriptlang.org/docs/handbook/declaration-merging.html). Add the following anywhere in your codebase. Creating a `zod.d.ts` file in your project root is a common convention.
+欲全域擴充 `GlobalMeta` 介面，請使用[*宣告式合併（declaration merging）*](https://www.typescriptlang.org/docs/handbook/declaration-merging.html)。在您程式碼庫的任何地方加入下列內容。慣例會在專案根目錄建立一個 `zod.d.ts` 檔案。
 
 ```ts
 declare module "zod" {
@@ -122,7 +121,7 @@ export {}
 
 ### `.meta()`
 
-For a more convenient approach, use the `.meta()` method to register a schema in `z.globalRegistry`. 
+若要使用更方便的方法，請使用 `.meta()` 方法在 `z.globalRegistry` 中註冊架構。
 
 <Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
 <Tab value="Zod">
@@ -143,7 +142,7 @@ const emailSchema = z.email().meta({
 </Tab>
 </Tabs>
 
-Calling `.meta()` without an argument will *retrieve* the metadata for a schema.
+呼叫 `.meta()` 且不帶參數可*擷取（retrieve）*架構的元資料。
 
 
 ```ts
@@ -151,7 +150,7 @@ emailSchema.meta();
 // => { id: "email_address", title: "Email address", ... }
 ```
 
-Metadata is associated with a *specific schema instance.* This is important to keep in mind, especially since Zod methods are immutable—they always return a new instance.
+元資料與*特定的架構實例相關聯*，這一點必須牢記，尤其是 Zod 方法是不可變的——它們永遠回傳一個新的實例。
 
 ```ts
 const A = z.string().meta({ description: "A cool string" });
@@ -164,10 +163,10 @@ B.meta(); // => undefined
 ### `.describe()`
 
 <Callout>
-The `.describe()` method still exists for compatibility with Zod 3, but `.meta()` is now the recommended approach.
+為了與 Zod 3 相容，`.describe()` 方法仍然存在，但仍推薦使用`.meta()` 方法。
 </Callout>
 
-The `.describe()` method is a shorthand for registering a schema in `z.globalRegistry` with just a `description` field.
+`.description()` 方法是在 `z.globalRegistry` 中僅用 `description` 欄位註冊架構的簡寫法。
 
 
 <Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
@@ -191,9 +190,9 @@ emailSchema.meta({ description: "An email address" });
 </Tab>
 </Tabs>
 
-## Custom registries
+## 自訂註冊
 
-You've already seen a simple example of a custom registry:
+您已經看過自訂註冊表的簡單範例：
 
 
 ```ts
@@ -202,11 +201,11 @@ import * as z from "zod";
 const myRegistry = z.registry<{ description: string };>();
 ```
 
-Let's look at some more advanced patterns.
+讓我們來看看一些更進階的範例。
 
-### Referencing inferred types
+### 推論型別的參照
 
-It's often valuable for the metadata type to reference the *inferred type* of a schema. For instance, you may want an `examples` field to contain examples of the schema's output.
+元資料型別參照架構的*型別推論*通常是值得參考的。例如：您可能需要一個 `examples` 欄位來包含架構輸出的範例。
 
 ```ts
 import * as z from "zod";
@@ -218,11 +217,11 @@ myRegistry.add(z.string(), { examples: ["hello", "world"] });
 myRegistry.add(z.number(), { examples: [1, 2, 3] });
 ```
 
-The special symbol `z.$output` is a reference to the schemas inferred output type (`z.infer<typeof schema>`). Similarly you can use `z.$input` to reference the input type.
+特殊符號 `z.$output` 是對架構推論的輸出型別（`z.infer<typeof schema>`）的參照。同樣您也可以使用 `z.$input` 來參照輸入型別。
 
-### Constraining schema types
+### 約束架構型別
 
-Pass a second generic to `z.registry()` to constrain the schema types that can be added to a registry. This registry only accepts string schemas.
+傳送第二個泛型別到 `z.registry()` 以限制可加入註冊表的架構型別。在此範例中，註冊表只接受字串架構。
 
 ```ts
 import * as z from "zod";

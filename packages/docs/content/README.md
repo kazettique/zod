@@ -25,4 +25,4 @@ Progress: 4 / 14
 - [x] index.mdx
 - [ ] json-schema.mdx
 - [ ] library-authors.mdx
-- [ ] metadata.mdx
+- [x] metadata.mdx
