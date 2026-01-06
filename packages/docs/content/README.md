@@ -20,7 +20,7 @@ Progress: 4 / 14
 - [x] basics.mdx
 - [ ] codecs.mdx
 - [x] ecosystem.mdx
-- [ ] error-customization.mdx
+- [x] error-customization.mdx
 - [x] error-formatting.mdx
 - [x] index.mdx
 - [ ] json-schema.mdx
