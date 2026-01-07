@@ -1,0 +1,266 @@
+---
+title: 給函式庫開發者
+description: "針對函式庫開發者整合 Zod 的指南與最佳實踐"
+---
+
+import { Callout } from "fumadocs-ui/components/callout"
+
+<Callout title="Update — July 10th, 2025">
+Zod `4.0.0` 已在 `npm` 上發行。如下所示完成漸進堆疊的過程。若要新增向上支援，請將依賴版本加入 `zod@^4.0.0`：
+
+```json
+// package.json
+{
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  }
+}
+```
+
+若您已經依照以下所述的對 Zod 4 支援做最佳實踐（例如：使用 `"zod/v4/core"` 子路徑），那麼應該不需要修改其他程式碼，不需要將函式庫進行重大的版本升級。
+</Callout>
+ 
+
+本頁內容主要提供給欲開發以 Zod 為基礎的函式庫之*開發者*作為參考。
+
+
+> 若您是函式庫開發者的作者，並認為此頁面應該包含一些額外的指引，請發起一個 issue！
+
+## 我需要依賴 Zod 嗎？
+
+首先，確定你是否需要依賴 Zod。
+
+若您要建立一個接受使用者自訂架構來執行黑盒驗證的函式庫，您可能不需要特別與 Zod 整合。您可以參考 [Standard Schema](https://standardschema.dev/)。這是 TypeScript 生態系統中大多數流行的驗證函式庫所實作的共用介面（請參閱 [完整清單](https://standardschema.dev/#what-schema-libraries-implement-the-spec)），清單中也包含 Zod。
+
+若您接受使用者定義構架，並將其視為「黑盒」驗證器，那麼此規格就會非常有效。給定任何符合規範的函式庫，您就可以抽取推論出的輸入/輸出型別、驗證輸入，並得到標準化的錯誤回報。
+
+若您需要 Zod 的特定功能，請繼續閱讀。
+
+## 如何設定對等依賴（peer dependencies）？
+
+Any library built on top of Zod should include `"zod"` in `"peerDependencies"`. This lets your users "bring their own Zod".
+任何以 Zod 為基礎的函式庫都應該在 `"peerDependencies"` 中包含 `"zod"`。這可以讓您的使用者「自帶 Zod」。
+
+```json
+// package.json
+{
+  // ...
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0" // the "zod/v4" subpath was added in 3.25.0
+  }
+}
+```
+
+在開發過程中，您需要滿足自己的對等依賴，為此，請將 `"zod"` 也加入您的 `"devDependencies"` 中。
+
+```ts
+// package.json
+{
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "devDependencies": {
+    // generally, you should develop against the latest version of Zod
+    "zod": "^3.25.0 || ^4.0.0"
+  }
+}
+```
+
+## 如何支援 Zod 4？
+
+若要支援 Zod 4，請將 `"zod"` 對等依賴的最低版本更新為 `^3.25.0 || ^4.0.0`。
+
+```json
+// package.json
+{
+  // ...
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  }
+}
+```
+
+從 `v3.25.0` 開始，Zod 4 的核心套件可以在 `"zod/v4/core"` 子路徑取得。請閱讀 [Zod 4 的版本管理](https://github.com/colinhacks/zod/issues/4371)一文，以瞭解此版本管理方式的完整脈絡。
+
+```ts
+import * as z4 from "zod/v4/core";
+```
+
+僅從這些子路徑匯入。將這些子路徑視為各自 Zod 版本的「永久連結（permalinks）」，這些路徑將永遠可用。
+
+- `"zod/v3"` 為 Zod 3 版本 ✅
+- `"zod/v4/core"` 為 Zod 4 核心版（Core）套件 ✅
+
+一般而言，您不應該從任何其他路徑匯入。Zod 核心版（Core）函式庫是 Zod 4 標準版（Classic）和 Zod 4 精簡版（Mini）的共用函式庫。一般而言，並不建議實作任何特別針對某一方的函式。請勿從這些子路徑匯入：
+
+- `"zod"` — ❌ 在 3.x 版本中，這會匯出 Zod 3。在 4.x 版本中，這將匯出 Zod 4。請改用永久連結。
+- `"zod/v4"` 和 `"zod/v4/mini"`- ❌ 這些子路徑分別是 Zod 4 標準版和精簡版的位置。若您希望函式庫能同時使用 Zod 和 Zod 精簡版，您應該依 `"zod/v4/core"` 中定義的基本類別來建立。若您引用了 `"zod/v4"` 模組中的類別，函式庫將無法在 Zod 精簡版上運行，反之亦然，所以我們並不鼓勵此舉。請改用 `"zod/v4/core"`，它會輸出由 Zod 標準版和 Zod 精簡版繼承而來，具有錢字號（`$`）前綴字的子類別。經典與精簡的子類別的內部是基本上相同的，差別只在於它們實作了哪些輔助方法。
+
+
+## 我需要發佈新的大版號嗎？
+
+答案是「不」，您不需要為了支援 Zod 4 而發佈新的主要版本函式庫（除非您要放棄對 Zod 3 的支援，但不建議這樣做）。
+
+您需要將對等依賴升級到 `^3.25.0`，因此使用者將需要用 `npm upgrade zod` 進行升版。但在 `zod@3.24` 和 `zod@3.25` 之間，Zod 3 並沒有巨大變動；事實上，沒有任何程式碼的改變。由於使用者需要修改程式碼，我不認為這構成巨大變動。因此我不建議發佈新的大版號。
+
+## 如何同時支援 Zod 3 和 Zod 4？
+
+從 `v3.25.0` 開始，套件包含 Zod 3 和 Zod 4 在各自的子路徑，因此可輕而易舉地同時支援兩個版本。
+
+```ts
+import * as z3 from "zod/v3";
+import * as z4 from "zod/v4/core";
+
+type Schema = z3.ZodTypeAny | z4.$ZodType;
+
+function acceptUserSchema(schema: z3.ZodTypeAny | z4.$ZodType) {
+  // ...
+}
+```
+
+為了在執行時區分 Zod 3 和 Zod 4 架構，請檢查 `"_zod"` 屬性。這個屬性只存在於 Zod 4 架構上。
+
+```ts
+import type * as z3 from "zod/v3";
+import type * as z4 from "zod/v4/core";
+
+declare const schema: z3.ZodTypeAny | z4.$ZodType;
+
+if ("_zod" in schema) {
+  schema._zod.def; // Zod 4 schema
+} else {
+  schema._def; // Zod 3 schema
+}
+```
+
+## 如何同時支援 Zod 和 Zod 精簡版（Mini）？
+
+您的函式庫程式碼應該只從 `"zod/v4/core"`匯入。這個子套件定義了 Zod 和 Zod 精簡版共用的介面、類別和工具函式。
+
+```ts
+// library code
+import * as z4 from "zod/v4/core";
+
+export function acceptObjectSchema<T extends z4.$ZodObject>(schema: T){
+  // parse data
+  z4.parse(schema, { /* somedata */});
+  // inspect internals
+  schema._zod.def.shape;
+}
+```
+
+透過使用共用的基礎介面，可以同時可靠地支援兩個子套件。此函式可同時接受 Zod 與 Zod 精簡版的架構。
+
+```ts
+// user code
+import { acceptObjectSchema } from "your-library";
+
+// Zod 4
+import * as z from "zod";
+acceptObjectSchema(z.object({ name: z.string() }));
+
+// Zod 4 Mini
+import * as zm from "zod/mini";
+acceptObjectSchema(zm.object({ name: zm.string() }))
+```
+
+有關核心子函式庫內容的詳細資訊，請參閱 [Zod 核心套件](/packages/core)頁面。
+
+{/* ### Future proofing
+
+To future-proof your library, your code should always allow for new schema and check classes to be added in the future. The addition of a new schema type is *not* considered a breaking change. 
+
+One common pattern when introspecting Zod schemas is to write a switch statement over the set of first-party schema types:
+
+```ts
+const schema = {} as z.$ZodTypes;
+const def = schema._zod.def;
+switch (def.type) {
+  case "string":
+    // ...
+    break;
+  case "object":
+    // ...
+    break;
+  default:
+    console.warn(`Unknown schema type: ${def.type}`);
+    // reasonable fallback behavior
+}
+```
+
+To future-proof this code, your `default` case should probably not throw an error. Instead, it should print an informative error and fall back to some reasonable behavior. If instead you `throw` an error in the default case, your library will be unusable if/when new schemas types are added in the future. Best to print a warning and treat it as a "no-op" (or some other reasonable fallback behavior). The same applies to unrecognized check types, string formats, etc.
+
+ */}
+
+## 如何接受使用者自定義的架構？
+
+接受使用者自訂的架構是任何以 Zod 為基礎函式庫的必要元素。本節將概述其最佳實踐。
+
+剛開始使用時，或許會很想寫一個像可接受 Zod 架構的函式：
+
+```ts
+import * as z4 from "zod/v4/core";
+
+function inferSchema<T>(schema: z4.$ZodType<T>) {
+  return schema;
+}
+```
+
+然而這個方法是不對，它限制了 TypeScript 正確推論參數的能力。無論傳入什麼，`schema`的型別將會是 `$ZodType` 的實例。
+
+```ts
+inferSchema(z.string());
+// => $ZodType<string>
+```
+
+此方法會丟失型別資訊，也就是輸入值實際上是屬於_哪個子類別_（在此範例是 `ZodString`）。這表示您無法在 `inferSchema` 的回傳結果來呼叫任何屬於字串的方法，例如 `.min()`。相反地，您的泛型參數應該擴充自核心 Zod 架構的介面：
+
+```ts
+function inferSchema<T extends z4.$ZodType>(schema: T) {
+  return schema;
+}
+
+inferSchema(z.string());
+// => ZodString ✅
+```
+
+將輸入值架構的型別限制在特定子類別：
+
+```ts
+
+import * as z4 from "zod/v4/core";
+
+// only accepts object schemas
+function inferSchema<T>(schema: z4.$ZodObject) {
+  return schema;
+}
+```
+
+透過限制輸入架構的型別來限縮輸出的型別：
+
+```ts
+
+import * as z4 from "zod/v4/core";
+
+// only accepts string schemas
+function inferSchema<T extends z4.$ZodType<string>>(schema: T) {
+  return schema;
+}
+
+inferSchema(z.string()); // ✅ 
+
+inferSchema(z.number()); 
+// ❌ The types of '_zod.output' are incompatible between these types. 
+// // Type 'number' is not assignable to type 'string'
+```
+
+若要使用架構解析資料，請使用頂層的 `z4.parse` / `z4.safeParse` / `z4.parseAsync` / `z4.safeParseAsync` 函式。`z4.$ZodType` 子類別上沒有任何方法。資料解析的方法實作在 Zod 和 Zod 精簡版，而不在 Zod 核心套件當中。
+
+```ts
+function parseData<T extends z4.$ZodType>(data: unknown, schema: T): z4.output<T> {
+  return z.parse(schema, data);
+}
+
+parseData("sup", z.string());
+// => string
+```
