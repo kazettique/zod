@@ -1,0 +1,592 @@
+---
+title: "JSON 架構"
+description: "如何將 Zod 架構轉換為 JSON 結構"
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from "fumadocs-ui/components/callout"
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+<Callout icon={'💎'}>
+**新功能** - Zod 4 引入了新功能：原生 [JSON Schema](https://json-schema.org/) 轉換。JSON 架構是描述 JSON 結構的標準（使用 JSON）。它被廣泛使用在 [OpenAPI](https://www.openapis.org/) 定義和定義 AI 的[結構化輸出](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat)。
+</Callout>
+
+
+## `z.fromJSONSchema()`
+
+<Callout type="warn">
+  ** 實驗性功能** - `z.fromJSONSchema()` 函式尚是實驗性階段，不被視為 Zod 穩定 API 的一部分。它可能會在未來的版本中有所變更。
+</Callout>
+
+Zod 提供 `z.fromJSONSchema()` 來將 JSON 架構轉換成 Zod 架構。
+
+```ts
+import * as z from "zod";
+
+const jsonSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    age: { type: "number" },
+  },
+  required: ["name", "age"],
+};
+
+const zodSchema = z.fromJSONSchema(jsonSchema);
+```
+
+
+## `z.toJSONSchema()`
+
+若要轉換 Zod 架構為 JSON 架構，請使用 `z.toJSONSchema()` 函式。
+
+```ts
+import * as z from "zod";
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+
+z.toJSONSchema(schema)
+// => {
+//   type: 'object',
+//   properties: { name: { type: 'string' }, age: { type: 'number' } },
+//   required: [ 'name', 'age' ],
+//   additionalProperties: false,
+// }
+```
+
+所有架構與檢查都會轉換為最接近的 JSON 架構等效型別。有些型別沒有對映，因此無法合理地表達。關於處理這些情況的詳細資訊，請參閱下面的 [`unrepresentable`](#unrepresentable) 章節。
+
+```ts
+z.bigint(); // ❌
+z.int64(); // ❌
+z.symbol(); // ❌
+z.undefined(); // ❌
+z.void(); // ❌
+z.date(); // ❌
+z.map(); // ❌
+z.set(); // ❌
+z.transform(); // ❌
+z.nan(); // ❌
+z.custom(); // ❌
+```
+
+
+第二個參數可用於自訂轉換邏輯。
+
+```ts
+z.toJSONSchema(schema, {
+  // ...params
+})
+```
+
+以下是各支援參數的快速參考，每項參數的詳細說明如下所示：
+
+```ts
+interface ToJSONSchemaParams {
+  /** The JSON Schema version to target.
+   * - `"draft-2020-12"` — Default. JSON Schema Draft 2020-12
+   * - `"draft-07"` — JSON Schema Draft 7
+   * - `"draft-04"` — JSON Schema Draft 4
+   * - `"openapi-3.0"` — OpenAPI 3.0 Schema Object */
+  target?:
+    | "draft-04"
+    | "draft-4"
+    | "draft-07"
+    | "draft-7"
+    | "draft-2020-12"
+    | "openapi-3.0"
+    | ({} & string)
+    | undefined;
+
+  /** A registry used to look up metadata for each schema. 
+   * Any schema with an `id` property will be extracted as a $def. */
+  metadata?: $ZodRegistry<Record<string, any>>;
+
+  /** How to handle unrepresentable types.
+   * - `"throw"` — Default. Unrepresentable types throw an error
+   * - `"any"` — Unrepresentable types become `{}` */
+  unrepresentable?: "throw" | "any";
+
+  /** How to handle cycles.
+   * - `"ref"` — Default. Cycles will be broken using $defs
+   * - `"throw"` — Cycles will throw an error if encountered */
+  cycles?: "ref" | "throw";
+
+  /* How to handle reused schemas.
+   * - `"inline"` — Default. Reused schemas will be inlined
+   * - `"ref"` — Reused schemas will be extracted as $defs */
+  reused?: "ref" | "inline";
+
+  /** A function used to convert `id` values to URIs to be used in *external* $refs.
+   *
+   * Default is `(id) => id`.
+   */
+  uri?: (id: string) => string;
+}
+```
+
+### 輸入輸出（`io`）
+
+有些架構的型別有不同的輸入和輸出型別，例如：`ZodPipe`、`ZodDefault` 和基礎型別轉型。預設情況下，`z.toJSONSchema` 的結果代表*輸出型別*；使用 `"io"： "input"` 來萃取其輸入型別。
+
+```ts
+const mySchema = z.string().transform(val => val.length).pipe(z.number());
+// ZodPipe
+
+const jsonSchema = z.toJSONSchema(mySchema); 
+// => { type: "number" }
+
+const jsonSchema = z.toJSONSchema(mySchema, { io: "input" }); 
+// => { type: "string" }
+```
+
+### 目標版本（`target`）
+
+欲設定目標 JSON 架構版本，使用 `target` 參數。預設值為 Draft 2020-12。
+
+```ts
+z.toJSONSchema(schema, { target: "draft-07" });
+z.toJSONSchema(schema, { target: "draft-2020-12" });
+z.toJSONSchema(schema, { target: "draft-04" });
+z.toJSONSchema(schema, { target: "openapi-3.0" });
+```
+
+### 元資料（`metadata`）
+
+> 若尚未閱讀，請參考[元資料與註冊](/metadata) 頁面，瞭解在 Zod 中儲存元資料的脈絡。
+
+在 Zod 中，元資料會儲存在註冊表中。Zod 匯出了一個全域註冊表 `z.globalRegistry` ，可用來儲存常見的元資料欄位，例如 `id`、`title`、`description` 和 `examples`。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+import * as z from "zod";
+
+// `.meta()` is a convenience method for registering a schema in `z.globalRegistry`
+const emailSchema = z.string().meta({ 
+  title: "Email address",
+  description: "Your email address",
+});
+
+z.toJSONSchema(emailSchema);
+// => { type: "string", title: "Email address", description: "Your email address", ... } 
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+import * as z from "zod";
+
+// `.meta()` is a convenience method for registering a schema in `z.globalRegistry`
+const emailSchema = z.string().register(z.globalRegistry, { 
+  title: "Email address",
+  description: "Your email address",
+});
+
+z.toJSONSchema(emailSchema);
+// => { type: "string", title: "Email address", description: "Your email address", ... } 
+```
+</Tab>
+</Tabs>
+
+所有的元資料欄位都會被複製到最終的 JSON 架構中。
+
+```ts
+const schema = z.string().meta({
+  whatever: 1234
+});
+
+z.toJSONSchema(schema);
+// => { type: "string", whatever: 1234 }
+```
+
+### 無法表述性（`unrepresentable`）
+
+下列 API 無法以 JSON 架構表示。預設情況下，若遇到這些 API，Zod 會拋出錯誤。嘗試轉換為 JSON 架構是不妥當的；您應該修改構架本身，因為這些 API 在 JSON 中沒有對應的版本。若遇到任何這些情況，Zod 將會拋出錯誤。
+
+```ts
+z.bigint(); // ❌
+z.int64(); // ❌
+z.symbol(); // ❌
+z.undefined(); // ❌
+z.void(); // ❌
+z.date(); // ❌
+z.map(); // ❌
+z.set(); // ❌
+z.transform(); // ❌
+z.nan(); // ❌
+z.custom(); // ❌
+```
+
+預設情況下，若遇到以下情況 Zod 會拋出錯誤。
+
+```ts
+z.toJSONSchema(z.bigint());
+// => throws Error
+```
+
+您可以將 `unrepresentable` 選項設定為 `any` 來改變行為。這將會把任何無法表述的型別轉換成 `{}`（相當於 JSON 架構中的 `unknown`）。
+
+```ts
+z.toJSONSchema(z.bigint(), { unrepresentable: "any" });
+// => {}
+```
+### 循環參照（`cycles`）
+
+處理循環參照的情境。若在 `z.toJSONSchema()` 尋覽架構時遇到循環參照，則使用 `$ref`來表示。
+
+```ts
+const User = z.object({
+  name: z.string(),
+  get friend() {
+    return User;
+  },
+});
+
+z.toJSONSchema(User);
+// => {
+//   type: 'object',
+//   properties: { name: { type: 'string' }, friend: { '$ref': '#' } },
+//   required: [ 'name', 'friend' ],
+//   additionalProperties: false,
+// }
+```
+
+若想要跑跑出來錯誤，請設定 `cycles` 屬性為 `"throw"`。
+
+```ts
+z.toJSONSchema(User, { cycles: "throw" });
+// => throws Error
+```
+
+
+### 複用（`reused`）
+
+若要處理在同一架構中重複出現的架構，預設情況下，Zod 會內嵌這些架構。
+
+```ts
+const name = z.string();
+const User = z.object({
+  firstName: name,
+  lastName: name,
+});
+
+z.toJSONSchema(User);
+// => {
+//   type: 'object',
+//   properties: { 
+//     firstName: { type: 'string' }, 
+//     lastName: { type: 'string' } 
+//   },
+//   required: [ 'firstName', 'lastName' ],
+//   additionalProperties: false,
+// }
+```
+
+您可以將設定 `reused` 屬性為 `"ref"` 來將這些架構萃取到 `$defs`。
+
+```ts
+z.toJSONSchema(User, { reused: "ref" });
+// => {
+//   type: 'object',
+//   properties: {
+//     firstName: { '$ref': '#/$defs/__schema0' },
+//     lastName: { '$ref': '#/$defs/__schema0' }
+//   },
+//   required: [ 'firstName', 'lastName' ],
+//   additionalProperties: false,
+//   '$defs': { __schema0: { type: 'string' } }
+// }
+```
+
+### 複寫（`override`）
+
+若要定義一些自訂的覆寫邏輯，請使用 `override`。所提供的回呼函式可以存取原始的 Zod 架構和預設的 JSON 架構。*此函式將直接修改 `ctx.jsonSchema`*。
+
+
+```ts
+const mySchema = /* ... */
+z.toJSONSchema(mySchema, {
+  override: (ctx)=>{
+    ctx.zodSchema; // the original Zod schema
+    ctx.jsonSchema; // the default JSON Schema
+
+    // directly modify
+    ctx.jsonSchema.whatever = "sup";
+  }
+});
+```
+
+請留意在呼叫此函式之前，無法呈現的型別會拋出一個 `Error`。若要為無法表述的型別另定義自訂行為，需要在使用 `override` 的同時附上 `unrepresentable："any"`。
+
+```ts
+// support z.date() as ISO datetime strings
+const result = z.toJSONSchema(z.date(), {
+  unrepresentable: "any",
+  override: (ctx) => {
+    const def = ctx.zodSchema._zod.def;
+    if(def.type ==="date"){
+      ctx.jsonSchema.type = "string";
+      ctx.jsonSchema.format = "date-time";
+    }
+  },
+});
+```
+
+
+## 轉換（Conversion）
+
+以下是關於 Zod 的 JSON 架構轉換邏輯的其他細項。
+
+### 字串格式（String formats）
+
+Zod 會將下列架構型別轉換為等效的 JSON 架構格式（`format` 屬性）：
+
+```ts
+// Supported via `format`
+z.email(); // => { type: "string", format: "email" }
+z.iso.datetime(); // => { type: "string", format: "date-time" }
+z.iso.date(); // => { type: "string", format: "date" }
+z.iso.time(); // => { type: "string", format: "time" }
+z.iso.duration(); // => { type: "string", format: "duration" }
+z.ipv4(); // => { type: "string", format: "ipv4" }
+z.ipv6(); // => { type: "string", format: "ipv6" }
+z.uuid(); // => { type: "string", format: "uuid" }
+z.guid(); // => { type: "string", format: "uuid" }
+z.url(); // => { type: "string", format: "uri" }
+```
+
+透過 `contentEncoding` 支援來這些架構：
+
+```ts
+z.base64(); // => { type: "string", contentEncoding: "base64" }
+```
+
+透過 `pattern` 支援所有其他字串格式：
+
+```ts
+z.base64url();
+z.cuid();
+z.emoji();
+z.nanoid();
+z.cuid2();
+z.ulid();
+z.cidrv4();
+z.cidrv6();
+z.mac();
+```
+
+### 數值型別（Numeric types）
+
+Zod 可將下列數值型別轉換為 JSON 架構：
+
+```ts
+// number
+z.number(); // => { type: "number" }
+z.float32(); // => { type: "number", exclusiveMinimum: ..., exclusiveMaximum: ... }
+z.float64(); // => { type: "number", exclusiveMinimum: ..., exclusiveMaximum: ... }
+
+// integer
+z.int(); // => { type: "integer" }
+z.int32(); // => { type: "integer", exclusiveMinimum: ..., exclusiveMaximum: ... }
+```
+
+### 物件架構（Object schemas）
+
+預設情況下，`z.object()` 架構包含 `additionalProperties："false"`。這是 Zod 預設行為的準確表示，因為普通的 `z.object()` 架構會脫去額外的屬性。
+
+```ts
+import * as z from "zod";
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+
+z.toJSONSchema(schema)
+// => {
+//   type: 'object',
+//   properties: { name: { type: 'string' }, age: { type: 'number' } },
+//   required: [ 'name', 'age' ],
+//   additionalProperties: false,
+// }
+```
+
+在 `"input"` 模式下轉換為 JSON 架構時，不會設定 `additionalProperties`。更多資訊請參閱 [`io` 的章節](#io)。
+
+```ts
+import * as z from "zod";
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+
+z.toJSONSchema(schema, { io: "input" });
+// => {
+//   type: 'object',
+//   properties: { name: { type: 'string' }, age: { type: 'number' } },
+//   required: [ 'name', 'age' ],
+// }
+```
+
+相比之下：
+
+- `z.looseObject()` 將*永不*設定 `additionalProperties:false`。
+- `z.strictObject()` 將*總是*設定 `additionalProperties:false`。
+
+
+### 檔案架構（File schemas）
+
+Zod 將 `z.file()` 轉換成以下對 OpenAPI 友善的架構：
+
+```ts
+z.file();
+// => { type: "string", format: "binary", contentEncoding: "binary" }
+```
+
+當然檔案尺寸和 MIME 檢查也包含在內：
+
+```ts
+z.file().min(1).max(1024 * 1024).mime("image/png");
+// => {
+//   type: "string",
+//   format: "binary",
+//   contentEncoding: "binary",
+//   contentMediaType: "image/png",
+//   minLength: 1,
+//   maxLength: 1048576,
+// }
+```
+
+
+### 可空值性（Nullability）
+
+在 JSON 架構中，Zod 將 `z.null()` 轉換成 `{ type："null" }`。
+
+```ts
+z.null();
+// => { type: "null" }
+```
+
+請注意 `z.undefined()` 在 JSON 架構中是無法表述的（請參閱[無法表述性](#unrepresentable)章節）。
+
+同樣地，`nullable` 是透過與 `null` 結合來表示：
+
+```ts
+z.nullable(z.string());
+// => { oneOf: [{ type: "string" }, { type: "null" }] }
+```
+
+可選填的架構會以原樣表示，但會加以 `optional` 注釋。
+
+```ts
+z.optional(z.string());
+// => { type: "string" }
+```
+
+{/* ### Pipes
+
+Pipes contain and input and and output schema. Zod uses the *output schema* for JSON Schema conversion. */}
+
+
+
+
+## 註冊表（Registries）
+
+將架構傳入 `z.toJSONSchema()` 後，會回傳一個*包含自己的* JSON 架構。
+
+在某些情況下，您可能有好幾個 Zod 架構想使用多個相互連結的 JSON 架構來表示，也許是要寫入 `.json` 檔案並藉由網站伺服器提供這些資料。
+
+```ts
+import * as z from "zod";
+
+const User = z.object({
+  name: z.string(),
+  get posts(){
+    return z.array(Post);
+  }
+});
+
+const Post = z.object({
+  title: z.string(),
+  content: z.string(),
+  get author(){
+    return User;
+  }
+});
+
+z.globalRegistry.add(User, {id: "User"});
+z.globalRegistry.add(Post, {id: "Post"});
+```
+
+為此，可以將 [registry](/metadata#registries) 傳入 `z.toJSONSchema()` 中。
+
+> **重要事項** - 所有架構應在註冊表中註冊 `id` 屬性！任何沒有 `id` 識別碼的架構將會被忽略。
+
+```ts
+z.toJSONSchema(z.globalRegistry);
+// => {
+//   schemas: {
+//     User: {
+//       id: 'User',
+//       type: 'object',
+//       properties: {
+//         name: { type: 'string' },
+//         posts: { type: 'array', items: { '$ref': 'Post' } }
+//       },
+//       required: [ 'name', 'posts' ],
+//       additionalProperties: false,
+//     },
+//     Post: {
+//       id: 'Post',
+//       type: 'object',
+//       properties: {
+//         title: { type: 'string' },
+//         content: { type: 'string' },
+//         author: { '$ref': 'User' }
+//       },
+//       required: [ 'title', 'content', 'author' ],
+//       additionalProperties: false,
+//     }
+//   }
+// }
+```
+
+`$ref` 預設是相對路徑，例如：`"User"`。欲使用絕對路徑，請將填入 `uri` 選項。此函式會將 `id` 轉換成完整的 URI 路徑。
+
+```ts
+z.toJSONSchema(z.globalRegistry, {
+  uri: (id) => `https://example.com/${id}.json`
+});
+// => {
+//   schemas: {
+//     User: {
+//       id: 'User',
+//       type: 'object',
+//       properties: {
+//         name: { type: 'string' },
+//         posts: {
+//           type: 'array',
+//           items: { '$ref': 'https://example.com/Post.json' }
+//         }
+//       },
+//       required: [ 'name', 'posts' ],
+//       additionalProperties: false,
+//     },
+//     Post: {
+//       id: 'Post',
+//       type: 'object',
+//       properties: {
+//         title: { type: 'string' },
+//         content: { type: 'string' },
+//         author: { '$ref': 'https://example.com/User.json' }
+//       },
+//       required: [ 'title', 'content', 'author' ],
+//       additionalProperties: false,
+//     }
+//   }
+// }
+```
