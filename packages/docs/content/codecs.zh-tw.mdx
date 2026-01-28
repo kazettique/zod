@@ -1,0 +1,569 @@
+---
+title: 編解碼器
+description: "具有編碼和解碼的雙向轉換"
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { ThemedImage } from "@/components/themed-image";
+
+> ✨ **New** — Introduced in `zod@4.1`
+
+所有的 Zod 架構都可以處理正向和反向的輸入值：
+
+- **正向**: `Input` 至 `Output`
+  - `.parse()`
+  - `.decode()`
+- **反向**: `Output` 至 `Input`
+  - `.encode()`
+
+多數情況下沒有差別。輸入和輸出的型別完全相同，所以「正向」和「反向」並無區別。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const schema = z.string();
+
+type Input = z.input<typeof schema>;    // string
+type Output = z.output<typeof schema>;  // string
+
+schema.parse("asdf");   // => "asdf"
+schema.decode("asdf");  // => "asdf"
+schema.encode("asdf");  // => "asdf"
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const schema = z.string();
+
+type Input = z.input<typeof schema>;    // string
+type Output = z.output<typeof schema>;  // string
+
+z.parse(schema, "asdf");   // => "asdf"
+z.decode(schema, "asdf");  // => "asdf"
+z.encode(schema, "asdf");  // => "asdf"
+```
+</Tab>
+</Tabs>
+
+
+然而有些架構的型別會導致輸入值和輸出值產生分歧，特別是 `z.codec()`。編解碼器是一種特殊型別的架構，它定義了兩個架構間的*雙向轉換*。
+
+```ts
+const stringToDate = z.codec(
+  z.iso.datetime(),  // input schema: ISO date string
+  z.date(),          // output schema: Date object
+  {
+    decode: (isoString) => new Date(isoString), // ISO string → Date
+    encode: (date) => date.toISOString(),       // Date → ISO string
+  }
+);
+```
+
+在這些情況下，`z.decode()` 和 `z.encode()` 的行為不同。
+
+<Tabs items={['Zod', 'Zod Mini']}>
+<Tab value="Zod">
+```ts
+stringToDate.decode("2024-01-15T10:30:00.000Z")
+// => Date
+
+stringToDate.encode(new Date("2024-01-15T10:30:00.000Z"))
+// => string
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.decode(stringToDate, "2024-01-15T10:30:00.000Z")
+// => Date
+
+z.encode(stringToDate, new Date("2024-01-15T10:30:00.000Z"))
+// => string
+```
+</Tab>
+</Tabs>
+
+> **注意** -在此所謂的方向及其他術語並無特別之處。與其使用 `A -> B` 編解碼器來*編碼*，可用 `B -> A` 編解碼器來*解碼*。使用「解碼」和「編碼」這些詞語只是一種慣例。
+
+這在網路邊界解析資料時特別有用。您可以在用戶端和伺服器端之間共用 Zod 架構，然後使用此架構在網路友善格式（例如：JSON）和更豐富的 JavaScript 表示法之間進行轉換。
+
+<ThemedImage 
+  lightSrc="/codecs/codecs-network-light.svg" 
+  darkSrc="/codecs/codecs-network-dark.svg" 
+  alt="Codecs encoding and decoding data across a network boundary" 
+/>
+
+### 組合性（Composability）
+
+> **注意** - 您可以在任何架構下使用 `z.encode()` 和 `z.decode()`。不一定要是 ZodCodec。
+
+編解碼器和其他架構一樣，可以將它們巢狀在物件、陣列、管道等。可以在任何地方使用它們，好無設限！
+
+```ts
+const payloadSchema = z.object({ 
+  startDate: stringToDate 
+});
+
+payloadSchema.decode({
+  startDate: "2024-01-15T10:30:00.000Z"
+}); // => { startDate: Date }
+```
+
+
+### 安全型別輸入（Type-safe inputs）
+
+雖然 `.parse()` 和 `.decode()` 在*執行期*的行為相同，但它們有不同的型別簽章（type signatures）。`.parse()` 方法接受 `unknown` 為輸入值並回傳符合架構推論*輸出型別*的值。相比之下，`z.decode()` 和`z.encode()` 函式*為強型別輸入值*。
+
+```ts
+stringToDate.parse(12345); 
+// no complaints from TypeScript (fails at runtime)
+
+stringToDate.decode(12345); 
+// ❌ TypeScript error: Argument of type 'number' is not assignable to parameter of type 'string'.
+
+stringToDate.encode(12345); 
+// ❌ TypeScript error: Argument of type 'number' is not assignable to parameter of type 'Date'.
+```
+
+為什麼會有差異？編碼和解碼意味著*轉換*。在許多情況下，這些方法的輸入值在程式碼中已是強型別，所以 z.decode/z.encode 接受強型別的輸入值，以便在編譯時就能發現錯誤。
+下面的圖表展示了 `parse()`、`decode()` 和 `encode()` 的型別簽章之間的差異。
+
+<ThemedImage 
+  lightSrc="/codecs/codecs-light.png" 
+  darkSrc="/codecs/codecs-dark.png" 
+  alt="Codec directionality diagram showing bidirectional transformation between input and output schemas" 
+/>
+
+### 非同步和安全的變體
+
+如同 `.transform()` 和 `.refine()`，編解碼器支援非同步轉換。
+
+```ts
+const asyncCodec = z.codec(z.string(), z.number(), {
+  decode: async (str) => Number(str),
+  encode: async (num) => num.toString(),
+});
+```
+
+如同 `parse()`，`decode()` 和 `encode()` 也有 "safe" 和 "async" 兩種變體。
+
+```ts
+stringToDate.decode("2024-01-15T10:30:00.000Z"); 
+// => Date
+
+stringToDate.decodeAsync("2024-01-15T10:30:00.000Z"); 
+// => Promise<Date>
+
+stringToDate.safeDecode("2024-01-15T10:30:00.000Z"); 
+// => { success: true, data: Date } | { success: false, error: ZodError }
+
+stringToDate.safeDecodeAsync("2024-01-15T10:30:00.000Z"); 
+// => Promise<{ success: true, data: Date } | { success: false, error: ZodError }>
+```
+
+## 編碼如何運作
+
+There are some subtleties to how certain Zod schemas "reverse" their parse behavior. 
+
+### 變解碼器（Codecs）
+
+這一點相當容易說明，編解碼器封裝了兩個型別間的雙向轉換。`z.decode()` 會觸發 `decode` 轉換，將輸入值轉換成解析值，而 `z.encode()` 會觸發 `encode` 轉換，將輸入值序列化回來。
+
+```ts
+const stringToDate = z.codec(
+  z.iso.datetime(),  // input schema: ISO date string
+  z.date(),          // output schema: Date object
+  {
+    decode: (isoString) => new Date(isoString), // ISO string → Date
+    encode: (date) => date.toISOString(),       // Date → ISO string
+  }
+);
+
+stringToDate.decode("2024-01-15T10:30:00.000Z"); 
+// => Date
+
+stringToDate.encode(new Date("2024-01-15")); 
+// => string
+```
+
+
+### 管道（Pipes）
+
+> **軼聞** - 實際上，編解碼器是管道的*子類別*，透過「中間」（interstitial）邏輯的增強而來的。
+
+在一般的解碼過程中，`ZodPipe<A, B>` 架構會先以 `A` 解析資料，然後將資料傳入 `B`。而如您所預料，在編碼期間資料會先以 `B` 編碼，然後傳入 `A`。
+
+### 精煉（Refinements）
+
+所有檢查（`.refine()`、`.min()`、`.max()`⋯⋯等）仍將雙向執行。
+
+```ts
+const schema = stringToDate.refine((date) => date.getFullYear() >= 2000, "Must be this millennium");
+
+schema.encode(new Date("2000-01-01"));
+// => Date
+
+schema.encode(new Date("1999-01-01"));
+// => ❌ ZodError: [
+//   {
+//     "code": "custom",
+//     "path": [],
+//     "message": "Must be this millennium"
+//   }
+// ]
+```
+
+為了避免自訂的 `.refine()` 邏輯出現非預期錯誤，Zod 會在 `z.encode()` 過程中會通過兩個「檢查哨戰」。第一關確保輸入型別符合預期型別（沒有 `invalid_type` 錯誤），若通過 Zod 則會進入第二關，執行精煉內部邏輯。
+
+此方法也支援「突變轉換」（mutating transforms），例如：`z.string().trim()` 或 `z.string().toLowerCase()`：
+
+```ts
+const schema = z.string().trim();
+
+schema.decode("  hello  ");
+// => "hello"
+
+schema.encode("  hello  ");
+// => "hello"
+```
+
+### 預設與預錯（Defaults and prefaults）
+
+預設和預錯僅限於「正向」方向。
+```ts
+const stringWithDefault = z.string().default("hello");
+
+stringWithDefault.decode(undefined); 
+// => "hello"
+
+stringWithDefault.encode(undefined); 
+// => ZodError: Expected string, received undefined
+```
+
+當為架構加入預設值時，輸入值會變成選填（即 `|undefined`），但輸出值則不會。因此， `undefined` 不是 `z.encode()` 的有效輸入值，而且不會套用預設/預錯。
+
+### 捕捉（Catch）
+
+同理，`.catch()` 也只僅限於「正向」方向。
+
+```ts
+const stringWithCatch = z.string().catch("hello");
+
+stringWithCatch.decode(1234); 
+// => "hello"
+
+stringWithCatch.encode(1234); 
+// => ZodError: Expected string, received number
+```
+
+### 字串布林值（Stringbool）
+
+> **注意** - [字串布林值](/api#stringbool) 在 Zod 發表編解碼器之前就有了。自此它在內部被重新實作為編解碼器。
+
+`z.stringbool()` API 將字串值（`"true"`、`"false"`、`"yes"`、`"no"` 等）轉換成 `boolean`。預設情況下，它會在 `z.encode()` 時將 `true` 轉換成 `"true"`，並將 `false` 轉換成 `"false"`。
+
+```ts
+const stringbool = z.stringbool();
+
+stringbool.decode("true");  // => true
+stringbool.decode("false"); // => false
+
+stringbool.encode(true);    // => "true"
+stringbool.encode(false);   // => "false"
+```
+
+若自訂 `truthy` 和 `falsy` 值的陣列，則會使用陣列中*第一個成員*。
+
+```ts
+const stringbool = z.stringbool({ truthy: ["yes", "y"], falsy: ["no", "n"] });
+
+stringbool.encode(true);    // => "yes"
+stringbool.encode(false);   // => "no"
+```
+
+### 變形（Transforms）
+
+⚠️ - `.transform()` API 實作了*單向的*轉換。若在架構中有任一 `.transform()` 存在，嘗試進行 `z.encode()` 操作將會產生*執行期錯誤*（而非 `ZodError`）。
+
+```ts
+const schema = z.string().transform(val => val.length);
+
+schema.encode(1234); 
+// ❌ Error: Encountered unidirectional transform during encode: ZodTransform
+```
+
+{/* ### Success
+
+`ZodSuccess` is also strictly unidirectional, and will throw an error if encountered during an encode operation.
+
+```ts
+const successSchema = z.success(z.string());
+
+z.decode(successSchema, "hello"); 
+// => true
+
+z.encode(successSchema, true);    
+// ❌ Error: Encountered unidirectional transform during encode: ZodSuccess
+``` */}
+
+
+## 有用的編解碼器（Useful codecs）
+
+以下是一些常用編解碼器的實作。為了客製化的考量，Zod 本身並未將這些 API 列為第一等類別。相反地您應該複製/貼上它們到專案中，並視需求修改它們。
+
+> **注釋** - 所有這些編解碼器實作都已通過測試與驗證。
+
+### `stringToNumber`
+
+使用 `parseFloat()` 將數字的字串表示轉換為 JavaScript `number` 型別。
+
+```ts
+const stringToNumber = z.codec(z.string().regex(z.regexes.number), z.number(), {
+  decode: (str) => Number.parseFloat(str),
+  encode: (num) => num.toString(),
+});
+
+stringToNumber.decode("42.5");  // => 42.5
+stringToNumber.encode(42.5);    // => "42.5"
+```
+
+### `stringToInt`
+
+使用 `parseInt()` 將整數的字串表示轉換為 JavaScript `number` 型別。
+
+```ts
+const stringToInt = z.codec(z.string().regex(z.regexes.integer), z.int(), {
+  decode: (str) => Number.parseInt(str, 10),
+  encode: (num) => num.toString(),
+});
+
+stringToInt.decode("42");  // => 42
+stringToInt.encode(42);    // => "42"
+```
+
+### `stringToBigInt`
+
+轉換字串為 JavaScript `bigint` 型別。
+
+```ts
+const stringToBigInt = z.codec(z.string(), z.bigint(), {
+  decode: (str) => BigInt(str),
+  encode: (bigint) => bigint.toString(),
+});
+
+stringToBigInt.decode("12345");  // => 12345n
+stringToBigInt.encode(12345n);   // => "12345"
+```
+
+### `numberToBigInt`
+
+轉換 JavaScript `number` 為 `bigint` 型別。
+
+```ts
+const numberToBigInt = z.codec(z.int(), z.bigint(), {
+  decode: (num) => BigInt(num),
+  encode: (bigint) => Number(bigint),
+});
+
+numberToBigInt.decode(42);   // => 42n
+numberToBigInt.encode(42n);  // => 42
+```
+
+### `isoDatetimeToDate`
+
+轉換 ISO 日期字串為 JavaScript `Date` 物件。
+
+```ts
+const isoDatetimeToDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (isoString) => new Date(isoString),
+  encode: (date) => date.toISOString(),
+});
+
+isoDatetimeToDate.decode("2024-01-15T10:30:00.000Z");  // => Date object
+isoDatetimeToDate.encode(new Date("2024-01-15"));       // => "2024-01-15T00:00:00.000Z"
+```
+
+### `epochSecondsToDate`
+
+轉換 Unix 時間戳記（自 Epoch 起的秒數）為 JavaScript `Date` 物件。
+
+```ts
+const epochSecondsToDate = z.codec(z.int().min(0), z.date(), {
+  decode: (seconds) => new Date(seconds * 1000),
+  encode: (date) => Math.floor(date.getTime() / 1000),
+});
+
+epochSecondsToDate.decode(1705314600);  // => Date object
+epochSecondsToDate.encode(new Date());  // => Unix timestamp in seconds
+```
+
+### `epochMillisToDate`
+
+轉換 Unix 時間戳記（自 Epoch 起的毫秒數）為 JavaScript `Date` 物件。
+
+```ts
+const epochMillisToDate = z.codec(z.int().min(0), z.date(), {
+  decode: (millis) => new Date(millis),
+  encode: (date) => date.getTime(),
+});
+
+epochMillisToDate.decode(1705314600000);  // => Date object
+epochMillisToDate.encode(new Date());     // => Unix timestamp in milliseconds
+```
+
+### `json(schema)`
+
+將 JSON 字串解析為結構化資料並回傳序列化的 JSON。此泛用函式接受輸出架構，以驗證解析後的 JSON 資料。
+
+```ts
+const jsonCodec = <T extends z.core.$ZodType>(schema: T) =>
+  z.codec(z.string(), schema, {
+    decode: (jsonString, ctx) => {
+      try {
+        return JSON.parse(jsonString);
+      } catch (err: any) {
+        ctx.issues.push({
+          code: "invalid_format",
+          format: "json",
+          input: jsonString,
+          message: err.message,
+        });
+        return z.NEVER;
+      }
+    },
+    encode: (value) => JSON.stringify(value),
+  });
+```
+
+指定架構的使用範例：
+
+```ts
+const jsonToObject = jsonCodec(z.object({ name: z.string(), age: z.number() }));
+
+jsonToObject.decode('{"name":"Alice","age":30}');  
+// => { name: "Alice", age: 30 }
+
+jsonToObject.encode({ name: "Bob", age: 25 });     
+// => '{"name":"Bob","age":25}'
+
+jsonToObject.decode('~~invalid~~'); 
+// ZodError: [
+//   {
+//     "code": "invalid_format",
+//     "format": "json",
+//     "path": [],
+//     "message": "Unexpected token '~', \"~~invalid~~\" is not valid JSON"
+//   }
+// ]
+```
+
+### `utf8ToBytes`
+
+轉換 UTF-8 字串為 `Uint8Array` 位元組陣列。
+
+```ts
+const utf8ToBytes = z.codec(z.string(), z.instanceof(Uint8Array), {
+  decode: (str) => new TextEncoder().encode(str),
+  encode: (bytes) => new TextDecoder().decode(bytes),
+});
+
+utf8ToBytes.decode("Hello, 世界!");  // => Uint8Array
+utf8ToBytes.encode(bytes);          // => "Hello, 世界!"
+```
+
+### `bytesToUtf8`
+
+轉換 `Uint8Array` 位元組陣列為 UTF-8 字串。
+
+```ts
+const bytesToUtf8 = z.codec(z.instanceof(Uint8Array), z.string(), {
+  decode: (bytes) => new TextDecoder().decode(bytes),
+  encode: (str) => new TextEncoder().encode(str),
+});
+
+bytesToUtf8.decode(bytes);          // => "Hello, 世界!"
+bytesToUtf8.encode("Hello, 世界!");  // => Uint8Array
+```
+
+### `base64ToBytes`
+
+將 base64 字串轉換為 `Uint8Array` 位元組陣列，反之亦然。
+
+```ts
+const base64ToBytes = z.codec(z.base64(), z.instanceof(Uint8Array), {
+  decode: (base64String) => z.util.base64ToUint8Array(base64String),
+  encode: (bytes) => z.util.uint8ArrayToBase64(bytes),
+});
+
+base64ToBytes.decode("SGVsbG8=");  // => Uint8Array([72, 101, 108, 108, 111])
+base64ToBytes.encode(bytes);       // => "SGVsbG8="
+```
+
+### `base64urlToBytes`
+
+將 base64url 字串（URL-safe base64）轉換為 `Uint8Array` 位元組陣列。
+
+```ts
+const base64urlToBytes = z.codec(z.base64url(), z.instanceof(Uint8Array), {
+  decode: (base64urlString) => z.util.base64urlToUint8Array(base64urlString),
+  encode: (bytes) => z.util.uint8ArrayToBase64url(bytes),
+});
+
+base64urlToBytes.decode("SGVsbG8");  // => Uint8Array([72, 101, 108, 108, 111])
+base64urlToBytes.encode(bytes);      // => "SGVsbG8"
+```
+
+### `hexToBytes`
+
+將十六進位字串轉換為 `Uint8Array` 位元組陣列，反之亦然。
+
+```ts
+const hexToBytes = z.codec(z.hex(), z.instanceof(Uint8Array), {
+  decode: (hexString) => z.util.hexToUint8Array(hexString),
+  encode: (bytes) => z.util.uint8ArrayToHex(bytes),
+});
+
+hexToBytes.decode("48656c6c6f");     // => Uint8Array([72, 101, 108, 108, 111])
+hexToBytes.encode(bytes);            // => "48656c6c6f"
+```
+
+### `stringToURL`
+
+轉換 URL 字串為 JavaScript `URL` 物件。
+
+```ts
+const stringToURL = z.codec(z.url(), z.instanceof(URL), {
+  decode: (urlString) => new URL(urlString),
+  encode: (url) => url.href,
+});
+
+stringToURL.decode("https://example.com/path");  // => URL object
+stringToURL.encode(new URL("https://example.com"));  // => "https://example.com/"
+```
+
+### `stringToHttpURL`
+
+將 HTTP/HTTPS URL 字串轉換為 JavaScript `URL` 物件。
+
+```ts
+const stringToHttpURL = z.codec(z.httpUrl(), z.instanceof(URL), {
+  decode: (urlString) => new URL(urlString),
+  encode: (url) => url.href,
+});
+
+stringToHttpURL.decode("https://api.example.com/v1");  // => URL object
+stringToHttpURL.encode(url);                           // => "https://api.example.com/v1"
+```
+
+### `uriComponent`
+
+使用 `encodeURIComponent()` 和 `decodeURIComponent()` 編碼和解碼 URI 元件。
+
+```ts
+const uriComponent = z.codec(z.string(), z.string(), {
+  decode: (encodedString) => decodeURIComponent(encodedString),
+  encode: (decodedString) => encodeURIComponent(decodedString),
+});
+
+uriComponent.decode("Hello%20World%21");  // => "Hello World!"
+uriComponent.encode("Hello World!");      // => "Hello%20World!"
+```
