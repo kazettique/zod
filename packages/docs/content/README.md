@@ -16,7 +16,7 @@ Progress: 9 / 14
   - [ ] core.mdx
   - [ ] mini.mdx
   - [ ] zod.mdx
-- [ ] api.mdx
+- [x] api.mdx
 - [x] basics.mdx
 - [x] codecs.mdx
 - [x] ecosystem.mdx

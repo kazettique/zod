@@ -1,0 +1,3076 @@
+---
+title: 定義架構
+description: "所有 Zod 架構型別、方法和驗證功能的完整 API 參考資料"
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from "fumadocs-ui/components/callout"
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+若要驗證資料，必須先定義一個*架構（schema）*。架構代表*型別*，型別可以是簡單的基礎值亦或複雜的巢狀物件和陣列。
+
+## 基礎型別
+
+```ts
+import * as z from "zod";
+
+// primitive types
+z.string();
+z.number();
+z.bigint();
+z.boolean();
+z.symbol();
+z.undefined();
+z.null();
+```
+
+
+### 強制轉型
+
+若要對輸入資料強制轉型，請改用 `z.coerce`：
+
+```ts
+z.coerce.string();    // String(input)
+z.coerce.number();    // Number(input)
+z.coerce.boolean();   // Boolean(input)
+z.coerce.bigint();    // BigInt(input)
+```
+
+這些帶有強制轉型的架構會嘗試將輸入值轉型為目標型別。
+
+```ts
+const schema = z.coerce.string();
+
+schema.parse("tuna");    // => "tuna"
+schema.parse(42);        // => "42"
+schema.parse(true);      // => "true"
+schema.parse(null);      // => "null"
+```
+
+這些強制架構的對輸入值的預設型別為 `unknown`。若要指定更特定的輸入值型別，請傳入一個泛用型別參數：
+
+```ts
+const A = z.coerce.number();
+type AInput = z.input<typeof A>; // => unknown
+
+const B = z.coerce.number<number>();
+type BInput = z.input<typeof B>; // => number
+```
+
+<Accordions type="single">
+<Accordion title="Zod 中的強制轉型如何運作">
+  
+  Zod 使用內建的建構式來轉換輸入值。
+
+  | Zod API                  | 強制轉型                    |
+  |--------------------------|----------------------------|
+  | `z.coerce.string()`      | `String(value)`            |
+  | `z.coerce.number()`      | `Number(value)`            |
+  | `z.coerce.boolean()`     | `Boolean(value)`           |
+  | `z.coerce.bigint()`      | `BigInt(value)`            |
+  | `z.coerce.date()`        | `new Date(value)`          |
+
+  使用 `z.coerce.boolean()` 進行的布林型別轉換可能與預期不同。任何 [truthy](https://developer.mozilla.org/en-US/docs/Glossary/Truthy) 值會被強制為 `true`，而任何 [falsy](https://developer.mozilla.org/en-US/docs/Glossary/Falsy) 值會被強制為 `false`。
+
+  ```ts
+  const schema = z.coerce.boolean(); // Boolean(input)
+
+  schema.parse("tuna"); // => true
+  schema.parse("true"); // => true
+  schema.parse("false"); // => true
+  schema.parse(1); // => true
+  schema.parse([]); // => true
+
+  schema.parse(0); // => false
+  schema.parse(""); // => false
+  schema.parse(undefined); // => false
+  schema.parse(null); // => false
+  ```
+
+  若要完全控制強制轉型的邏輯，請考慮使用 [`z.transform()`](#transforms) 或 [`z.pipe()`](#pipes)。
+
+</Accordion>
+<Accordion title="自訂輸入值型別">
+  
+  預設情況下，任何 `z.coerce` 架構的_輸入_型別是 `unknown`。在、某些情況下，輸入值的型別可能比較特殊。您可以使用泛用型別參數指定輸入值的型別。
+
+  ```ts
+  const regularCoerce = z.coerce.string();
+  type RegularInput = z.input<typeof regularCoerce>; // => unknown
+  type RegularOutput = z.output<typeof regularCoerce>; // => string
+
+  const customInput = z.coerce.string<string>();
+  type CustomInput = z.input<typeof customInput>; // => string
+  type CustomOutput = z.output<typeof customInput>; // => string
+  ```
+
+</Accordion>
+</Accordions>
+
+
+
+## 實字（Literals）
+
+實字架構代表一個 [實字型別（literal type）](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#literal-types)，例如：`"hello world"` 或 `5`。
+
+```ts
+const tuna = z.literal("tuna");
+const twelve = z.literal(12);
+const twobig = z.literal(2n);
+const tru = z.literal(true);
+```
+
+欲表示 JavaScript `null` 和 `undefined` 的實字型別：
+
+```ts
+z.null();
+z.undefined();
+z.void(); // equivalent to z.undefined()
+```
+
+允許複數的實字值：
+
+```ts
+const colors = z.literal(["red", "green", "blue"]);
+
+colors.parse("green"); // ✅
+colors.parse("yellow"); // ❌
+```
+
+從實字架構中抽取出允許值的集合（Set）：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+colors.values; // => Set<"red" | "green" | "blue">
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+// no equivalent
+```
+</Tab>
+</Tabs>
+
+
+
+## 字串
+
+{/* Zod provides a handful of built-in string validation and transform APIs.
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.string().startsWith("fourscore")
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.string().check(z.startsWith("fourscore"))
+```
+</Tab>
+</Tabs>
+
+All of the APIs documented below support the `error` parameter for customizing the error message.
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.string().startsWith("fourscore", {error: "Nice try, buddy"})
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.string().check(z.startsWith("fourscore", {error: "Nice try, buddy"}))
+```
+</Tab></Tabs> */}
+
+
+Zod 提供了一些內建的字串驗證與轉換 API。一些常用的字串驗證如下：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.string().max(5);
+z.string().min(5);
+z.string().length(5);
+z.string().regex(/^[a-z]+$/);
+z.string().startsWith("aaa");
+z.string().endsWith("zzz");
+z.string().includes("---");
+z.string().uppercase();
+z.string().lowercase();
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.string().check(z.maxLength(5));
+z.string().check(z.minLength(5));
+z.string().check(z.length(5));
+z.string().check(z.regex(/^[a-z]+$/));
+z.string().check(z.startsWith("aaa"));
+z.string().check(z.endsWith("zzz"));
+z.string().check(z.includes("---"));
+z.string().check(z.uppercase());
+z.string().check(z.lowercase());
+```
+</Tab>
+</Tabs>
+
+執行一些簡單的字串轉換：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.string().trim(); // trim whitespace
+z.string().toLowerCase(); // toLowerCase
+z.string().toUpperCase(); // toUpperCase
+z.string().normalize(); // normalize unicode characters
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.string().check(z.trim()); // trim whitespace
+z.string().check(z.toLowerCase()); // toLowerCase
+z.string().check(z.toUpperCase()); // toUpperCase
+z.string().check(z.normalize()); // normalize unicode characters
+```
+</Tab>
+</Tabs>
+
+## 字串格式
+
+驗證一些常見的字串格式：
+
+```ts
+z.email();
+z.uuid();
+z.url();
+z.httpUrl();       // http or https URLs only
+z.hostname();
+z.emoji();         // validates a single emoji character
+z.base64();
+z.base64url();
+z.hex();
+z.jwt();
+z.nanoid();
+z.cuid();
+z.cuid2();
+z.ulid();
+z.ipv4();
+z.ipv6();
+z.mac();
+z.cidrv4();        // ipv4 CIDR block
+z.cidrv6();        // ipv6 CIDR block
+z.hash("sha256");  // or "sha1", "sha384", "sha512", "md5"
+z.iso.date();
+z.iso.time();
+z.iso.datetime();
+z.iso.duration();
+```
+
+### 電子郵件
+
+欲驗證電子郵件地址：
+
+```ts
+z.email();
+```
+
+預設情況下，Zod 使用相對嚴格的電子郵件正規表達式來驗證包含一般字元的一般電子郵件地址。它與 Gmail 強制執行的規則大致相同。要瞭解有關這個 regex 的更多資訊，請參閱[這篇文章](https://colinhacks.com/essays/reasonable-email-regex)。
+
+```ts
+/^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_+-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i
+```
+
+若要自訂電子郵件驗證行為，可以傳送自訂的正則表達式到 `pattern` 參數。
+
+```ts
+z.email({ pattern: /your regex here/ });
+```
+
+Zod 輸出幾個常用的正規表達式。
+
+```ts
+// Zod's default email regex
+z.email();
+z.email({ pattern: z.regexes.email }); // equivalent
+
+// the regex used by browsers to validate input[type=email] fields
+// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/email
+z.email({ pattern: z.regexes.html5Email });
+
+// the classic emailregex.com regex (RFC 5322)
+z.email({ pattern: z.regexes.rfc5322Email });
+
+// a loose regex that allows Unicode (good for intl emails)
+z.email({ pattern: z.regexes.unicodeEmail });
+```
+
+### UUIDs
+
+欲驗證 UUIDs：
+
+```ts
+z.uuid();
+```
+
+欲指定特定的 UUID 版本：
+
+```ts
+// supports "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"
+z.uuid({ version: "v4" });
+
+// for convenience
+z.uuidv4();
+z.uuidv6();
+z.uuidv7();
+```
+
+RFC 9562/4122 UUID 規格要求位 8 元組的前兩個位元為 `10`。其他類 UUID 的識別碼不強制執行此限制。欲驗證任何類似 UUID 的識別碼：
+
+```ts
+z.guid();
+```
+
+### URLs
+
+欲驗證任何與 WHATWG 相容的 URL：
+
+```ts
+const schema = z.url();
+
+schema.parse("https://example.com"); // ✅
+schema.parse("http://localhost"); // ✅
+schema.parse("mailto:noreply@zod.dev"); // ✅
+```
+
+如您所見這相當寬鬆。其內部使用 `new URL()` 建構式來驗證輸入值；其行為在不同的平台和執行環境很可能會有所不同，但在任何特定的 JS 執行環境/引擎上，這已是驗證 URIs/URLs 最嚴格的方式。
+
+根據特定的正規表達式驗證主機名稱：
+
+```ts
+const schema = z.url({ hostname: /^example\.com$/ });
+
+schema.parse("https://example.com"); // ✅
+schema.parse("https://zombo.com"); // ❌
+```
+
+若要根據特定 regex 驗證通訊協定，請使用 `protocol` 參數。
+
+```ts
+const schema = z.url({ protocol: /^https$/ });
+
+schema.parse("https://example.com"); // ✅
+schema.parse("http://example.com"); // ❌
+```
+
+<Callout>
+  **Web URL** - 在許多情況下需要特別驗證 Web URL。建議如下：
+
+  ```ts
+  const httpUrl = z.url({
+    protocol: /^https?$/,
+    hostname: z.regexes.domain
+  });
+  ```
+
+  這會限制通訊協定為 `http`/`https`，並確保主機名稱是使用 `z.regexes.domain` 正則表達式的有效網域名稱：
+
+  ```ts
+  /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/
+  ```
+</Callout>
+
+欲將 URL 正規化，請使用 `normalize` 標誌。這會用 `new URL()` 回傳的 [正規化 URL](https://chatgpt.com/share/6881547f-bebc-800f-9093-f5981e277c2c)覆蓋其輸入值。
+
+```ts
+new URL("HTTP://ExAmPle.com:80/./a/../b?X=1#f oo").href
+// => "http://example.com/b?X=1#f%20oo"
+```
+
+### ISO 日期時間
+
+您可能會注意到 Zod 字竄包含一些日期/時間相關的驗證。這些驗證基於正則表達式實作而成，因此不像專門的日期/時間函式庫驗證那麼嚴格。不過，它們對於驗證使用者的輸入值非常方便。
+
+`z.iso.datetime()` 方法強制執行 ISO 8601；預設不允許設定時區：
+
+```ts
+const datetime = z.iso.datetime();
+
+datetime.parse("2020-01-01T06:15:00Z"); // ✅
+datetime.parse("2020-01-01T06:15:00.123Z"); // ✅
+datetime.parse("2020-01-01T06:15:00.123456Z"); // ✅ (arbitrary precision)
+datetime.parse("2020-01-01T06:15:00+02:00"); // ❌ (offsets not allowed)
+datetime.parse("2020-01-01T06:15:00"); // ❌ (local not allowed)
+```
+
+欲設定時區：
+
+```ts
+const datetime = z.iso.datetime({ offset: true });
+
+// allows timezone offsets
+datetime.parse("2020-01-01T06:15:00+02:00"); // ✅
+
+// basic offsets not allowed
+datetime.parse("2020-01-01T06:15:00+02");    // ❌
+datetime.parse("2020-01-01T06:15:00+0200");  // ❌
+
+// Z is still supported
+datetime.parse("2020-01-01T06:15:00Z"); // ✅ 
+```
+
+設定無限定（無時區）日期時間：
+
+```ts
+const schema = z.iso.datetime({ local: true });
+schema.parse("2020-01-01T06:15:01"); // ✅
+schema.parse("2020-01-01T06:15"); // ✅ seconds optional
+```
+
+欲限制時間精度（`precision`），預設情況下，秒是選填的，並允許設定秒以下的精度。
+
+```ts
+const a = z.iso.datetime();
+a.parse("2020-01-01T06:15Z"); // ✅
+a.parse("2020-01-01T06:15:00Z"); // ✅
+a.parse("2020-01-01T06:15:00.123Z"); // ✅
+
+const b = z.iso.datetime({ precision: -1 }); // minute precision (no seconds)
+b.parse("2020-01-01T06:15Z"); // ✅
+b.parse("2020-01-01T06:15:00Z"); // ❌
+b.parse("2020-01-01T06:15:00.123Z"); // ❌
+
+const c = z.iso.datetime({ precision: 0 }); // second precision only
+c.parse("2020-01-01T06:15Z"); // ❌
+c.parse("2020-01-01T06:15:00Z"); // ✅
+c.parse("2020-01-01T06:15:00.123Z"); // ❌
+
+const d = z.iso.datetime({ precision: 3 }); // millisecond precision only
+d.parse("2020-01-01T06:15Z"); // ❌
+d.parse("2020-01-01T06:15:00Z"); // ❌
+d.parse("2020-01-01T06:15:00.123Z"); // ✅
+```
+
+### ISO 日期
+
+`z.iso.date()` 方法驗證字串的格式為 `YYYY-MM-DD`。
+
+```ts
+const date = z.iso.date();
+
+date.parse("2020-01-01"); // ✅
+date.parse("2020-1-1"); // ❌
+date.parse("2020-01-32"); // ❌
+```
+
+### ISO 時間
+
+`z.iso.time()` 方法驗證字串的格式為 `HH:MM[:SS[.s+]]`。預設秒是選填的，秒的小數點也是選填的。
+
+```ts
+const time = z.iso.time();
+
+time.parse("03:15"); // ✅
+time.parse("03:15:00"); // ✅
+time.parse("03:15:00.9999999"); // ✅ (arbitrary precision)
+```
+
+不允許任何形式的時區偏移。
+
+```ts
+time.parse("03:15:00Z"); // ❌ (no `Z` allowed)
+time.parse("03:15:00+02:00"); // ❌ (no offsets allowed)
+```
+
+使用精度參數（`precision`）來限制允許的小數精度。
+
+```ts
+z.iso.time({ precision: -1 }); // HH:MM (minute precision)
+z.iso.time({ precision: 0 });  // HH:MM:SS (second precision)
+z.iso.time({ precision: 1 });  // HH:MM:SS.s (decisecond precision)
+z.iso.time({ precision: 2 });  // HH:MM:SS.ss (centisecond precision)
+z.iso.time({ precision: 3 });  // HH:MM:SS.sss (millisecond precision)
+```
+
+### IP 位址
+
+```ts
+const ipv4 = z.ipv4();
+ipv4.parse("192.168.0.0"); // ✅
+
+const ipv6 = z.ipv6();
+ipv6.parse("2001:db8:85a3::8a2e:370:7334"); // ✅
+```
+
+### IP 區塊（CIDR）
+
+驗證以[CIDR 表示法（無類別域間路由）](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)所指定的 IP 位址範圍。
+
+```ts
+const cidrv4 = z.cidrv4();
+cidrv4.parse("192.168.0.0/24"); // ✅
+
+const cidrv6 = z.cidrv6();
+cidrv6.parse("2001:db8::/32"); // ✅
+```
+
+### MAC 位址
+
+驗證標準 48 位元 MAC 位址 [IEEE 802](https://en.wikipedia.org/wiki/MAC_address)。
+
+```ts
+const mac = z.mac(); 
+mac.parse("00:1A:2B:3C:4D:5E");  // ✅
+mac.parse("00-1a-2b-3c-4d-5e");  // ❌ colon-delimited by default
+mac.parse("001A:2B3C:4D5E");     // ❌ standard formats only
+mac.parse("00:1A:2b:3C:4d:5E");  // ❌ no mixed case
+
+// custom delimiter
+const dashMac = z.mac({ delimiter: "-" });
+dashMac.parse("00-1A-2B-3C-4D-5E"); // ✅
+```
+
+### JWTs
+
+驗證 [JSON Web Tokens](https://jwt.io/)。
+
+```ts
+z.jwt();
+z.jwt({ alg: "HS256" });
+```
+
+### 雜湊表
+
+驗證加密的雜湊值：
+
+```ts
+z.hash("md5");
+z.hash("sha1");
+z.hash("sha256");
+z.hash("sha384");
+z.hash("sha512");
+```
+
+預設情況下，`z.hash()` 期望使用傳統的十六進位編碼。當然也可以使用 `enc` 參數指定不同的編碼：
+
+```ts
+z.hash("sha256", { enc: "hex" });       // default
+z.hash("sha256", { enc: "base64" });    // base64 encoding
+z.hash("sha256", { enc: "base64url" }); // base64url encoding (no padding)
+```
+
+<Accordions>
+<Accordion title="Expected lengths and padding">
+
+| Algorithm / Encoding | `"hex"`  | `"base64"`  | `"base64url"`  |
+|-----------|-----------|--------------|-----------------|
+| `"md5"`   | 32        | 24 (22 + "==") | 22              |
+| `"sha1"`  | 40        | 28 (27 + "=")  | 27              |
+| `"sha256"`| 64        | 44 (43 + "=")  | 43              |
+| `"sha384"`| 96        | 64 (no padding)| 64              |
+| `"sha512"`| 128       | 88 (86 + "==") | 86              |
+
+</Accordion>
+</Accordions>
+
+### 自訂格式
+
+欲自定義字串格式：
+
+```ts
+const coolId = z.stringFormat("cool-id", ()=>{
+  // arbitrary validation here
+  return val.length === 100 && val.startsWith("cool-");
+});
+
+// a regex is also accepted
+z.stringFormat("cool-id", /^cool-[a-z0-9]{95}$/);
+```
+
+此架構會產生 `"invalid_format"` 錯誤訊息，比起經由精煉（refinements）或 `z.custom()` 產生的 `"custom"` 錯誤更能說明錯誤的內容。
+
+```ts
+myFormat.parse("invalid input!");
+// ZodError: [
+//   {
+//     "code": "invalid_format",
+//     "format": "cool-id",
+//     "path": [],
+//     "message": "Invalid cool-id"
+//   }
+// ]
+```
+
+## 樣板實字（Template literals）
+
+> **新功能** - 自 `zod@4.0` 版本推出。
+
+欲定義樣板實字架構：
+
+```ts
+const schema = z.templateLiteral([ "hello, ", z.string(), "!" ]);
+// `hello, ${string}!`
+```
+
+`z.templateLiteral` API 可以處理任意數量的字串實字（例如：`"hello"`）和架構，任何具備可賦值為 `string | number | bigint | boolean | null | undefined` 推論型別的架構都可以使用。
+
+```ts
+z.templateLiteral([ "hi there" ]);
+// `hi there`
+
+z.templateLiteral([ "email: ", z.string() ]);
+// `email: ${string}`
+
+z.templateLiteral([ "high", z.literal(5) ]);
+// `high5`
+
+z.templateLiteral([ z.nullable(z.literal("grassy")) ]);
+// `grassy` | `null`
+
+z.templateLiteral([ z.number(), z.enum(["px", "em", "rem"]) ]);
+// `${number}px` | `${number}em` | `${number}rem`
+```
+
+## 數值
+
+使用 `z.number()` 來驗證數值，其允許任何有限的數字。
+
+```ts
+const schema = z.number();
+
+schema.parse(3.14);      // ✅
+schema.parse(NaN);       // ❌
+schema.parse(Infinity);  // ❌
+```
+
+Zod 實作了一些特定數值的驗證：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.number().gt(5);
+z.number().gte(5);                     // alias .min(5)
+z.number().lt(5);
+z.number().lte(5);                     // alias .max(5)
+z.number().positive();       
+z.number().nonnegative();    
+z.number().negative(); 
+z.number().nonpositive(); 
+z.number().multipleOf(5);              // alias .step(5)
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.number().check(z.gt(5));
+z.number().check(z.gte(5));            // alias .minimum(5)
+z.number().check(z.lt(5));
+z.number().check(z.lte(5));            // alias .maximum(5)
+z.number().check(z.positive()); 
+z.number().check(z.nonnegative()); 
+z.number().check(z.negative()); 
+z.number().check(z.nonpositive()); 
+z.number().check(z.multipleOf(5));     // alias .step(5)
+```
+</Tab>
+</Tabs>
+
+基於某些原因，若想要驗證 `NaN`，請使用 `z.nan()` 方法。
+
+```ts
+z.nan().parse(NaN);              // ✅
+z.nan().parse("anything else");  // ❌
+```
+
+## 整數值
+
+欲驗證整數值：
+
+```ts
+z.int();     // restricts to safe integer range
+z.int32();   // restrict to int32 range
+```
+
+## BigInt
+
+欲驗證 BigInt：
+
+```ts
+z.bigint();
+```
+
+Zod 提供一些 Bigint 專用的驗證方法。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.bigint().gt(5n);
+z.bigint().gte(5n);                    // alias `.min(5n)`
+z.bigint().lt(5n);
+z.bigint().lte(5n);                    // alias `.max(5n)`
+z.bigint().positive(); 
+z.bigint().nonnegative(); 
+z.bigint().negative(); 
+z.bigint().nonpositive(); 
+z.bigint().multipleOf(5n);             // alias `.step(5n)`
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.bigint().check(z.gt(5n));
+z.bigint().check(z.gte(5n));           // alias `.minimum(5n)`
+z.bigint().check(z.lt(5n));
+z.bigint().check(z.lte(5n));           // alias `.maximum(5n)`
+z.bigint().check(z.positive()); 
+z.bigint().check(z.nonnegative()); 
+z.bigint().check(z.negative()); 
+z.bigint().check(z.nonpositive()); 
+z.bigint().check(z.multipleOf(5n));    // alias `.step(5n)`
+```
+
+</Tab>
+</Tabs>
+
+## 布林值
+
+欲驗證布林值：
+
+```ts
+z.boolean().parse(true); // => true
+z.boolean().parse(false); // => false
+```
+
+## 日期與時間
+
+使用 `z.date()` 來驗證 `Date` 實例。
+
+```ts
+z.date().safeParse(new Date()); // success: true
+z.date().safeParse("2022-01-12T06:15:00.000Z"); // success: false
+```
+
+欲自訂錯誤訊息：
+
+```ts
+z.date({
+  error: issue => issue.input === undefined ? "Required" : "Invalid date"
+});
+```
+
+Zod 提供一些日期專用的驗證方法。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.date().min(new Date("1900-01-01"), { error: "Too old!" });
+z.date().max(new Date(), { error: "Too young!" });
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.date().check(z.minimum(new Date("1900-01-01"), { error: "Too old!" }));
+z.date().check(z.maximum(new Date(), { error: "Too young!" }));
+```
+</Tab>
+</Tabs>
+
+<div id="zod-enums" style={{height:"0px" }} /> 
+
+## 列舉
+
+使用 `z.enum` 驗證輸入值是否涵蓋在一組固定的_字串_值。
+
+```ts
+const FishEnum = z.enum(["Salmon", "Tuna", "Trout"]);
+
+FishEnum.parse("Salmon"); // => "Salmon"
+FishEnum.parse("Swordfish"); // => ❌
+```
+
+<Callout>
+  注意 - 若將字串陣列以宣告的變數帶入，Zod 將無法正確推論每個元素的實際值。
+
+  ```ts
+  const fish = ["Salmon", "Tuna", "Trout"];
+  
+  const FishEnum = z.enum(fish);
+  type FishEnum = z.infer<typeof FishEnum>; // string
+  ```
+
+  欲解決此問題，請務必將陣列傳入 `z.enum()` 函式，或使用 [`as const`](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-4.html#const-assertions) 。
+
+  ```ts
+  const fish = ["Salmon", "Tuna", "Trout"] as const;
+
+  const FishEnum = z.enum(fish);
+  type FishEnum = z.infer<typeof FishEnum>; // "Salmon" | "Tuna" | "Trout"
+  ```
+</Callout>
+
+支援類列舉的物件實字（`{[key：string]：string | number }`）。
+
+```ts
+const Fish = {
+  Salmon: 0,
+  Tuna: 1
+} as const
+
+const FishEnum = z.enum(Fish)
+FishEnum.parse(Fish.Salmon); // => ✅
+FishEnum.parse(0); // => ✅
+FishEnum.parse(2); // => ❌
+```
+
+也可傳入一個外部宣告的 TypeScript 列舉。
+
+```ts
+enum Fish {
+  Salmon = 0,
+  Tuna = 1
+}
+
+const FishEnum = z.enum(Fish);
+FishEnum.parse(Fish.Salmon); // => ✅
+FishEnum.parse(0); // => ✅
+FishEnum.parse(2); // => ❌
+```
+
+<Callout>
+**Zod 4** - 此功能取代 Zod 3 中的 `z.nativeEnum()` API。
+
+請注意[不建議](https://www.totaltypescript.com/why-i-dont-like-typescript-enums)使用 TypeScript 的 `enum` 關鍵字。
+</Callout>
+
+```ts
+enum Fish {
+  Salmon = "Salmon",
+  Tuna = "Tuna",
+  Trout = "Trout",
+}
+
+const FishEnum = z.enum(Fish);
+```
+
+### `.enum` 方法
+
+將架構的值抽取為類列舉的物件：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const FishEnum = z.enum(["Salmon", "Tuna", "Trout"]);
+
+FishEnum.enum;
+// => { Salmon: "Salmon", Tuna: "Tuna", Trout: "Trout" }
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const FishEnum = z.enum(["Salmon", "Tuna", "Trout"]);
+
+FishEnum.def.entries;
+// => { Salmon: "Salmon", Tuna: "Tuna", Trout: "Trout" }
+```
+</Tab>
+</Tabs>
+
+### `.exclude()` 方法
+
+在建立新的列舉架構後欲排除某些值，使用 `.exclude()` 方法：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const FishEnum = z.enum(["Salmon", "Tuna", "Trout"]);
+const TunaOnly = FishEnum.exclude(["Salmon", "Trout"]);
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+// no equivalent
+ 
+```
+</Tab>
+</Tabs>
+
+### `.extract()` 方法
+
+在建立新的列舉架構後欲抽取特定值，使用 `.extract()` 方法：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const FishEnum = z.enum(["Salmon", "Tuna", "Trout"]);
+const SalmonAndTroutOnly = FishEnum.extract(["Salmon", "Trout"]);
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+// no equivalent
+ 
+```
+</Tab>
+</Tabs>
+
+## 字串布林值 [#字串布林值]
+
+> **💎 Zod 4 的新功能**
+
+某些情況下（例如：解析環境變數）將某些字串的「類布林值」（boolish）解析成「純布林值」是很有用的。為了實現這一點，Zod 4 引入了 `z.stringbool()` 方法：
+
+```ts
+const strbool = z.stringbool();
+
+strbool.parse("true")         // => true
+strbool.parse("1")            // => true
+strbool.parse("yes")          // => true
+strbool.parse("on")           // => true
+strbool.parse("y")            // => true
+strbool.parse("enabled")      // => true
+
+strbool.parse("false");       // => false
+strbool.parse("0");           // => false
+strbool.parse("no");          // => false
+strbool.parse("off");         // => false
+strbool.parse("n");           // => false
+strbool.parse("disabled");    // => false
+
+strbool.parse(/* anything else */); // ZodError<[{ code: "invalid_value" }]>
+```
+
+欲自訂真值（truthy）和偽值（falsy）：
+
+```ts
+// these are the defaults
+z.stringbool({
+  truthy: ["true", "1", "yes", "on", "y", "enabled"],
+  falsy: ["false", "0", "no", "off", "n", "disabled"],
+});
+```
+
+預設架構是*不區分大小寫*（case-insensitive）的；所有輸入值在與真/偽值比較之前皆會轉換為小寫。若要使它對區分大小寫，請加入以下設定：
+
+```ts
+z.stringbool({
+  case: "sensitive"
+});
+```
+
+
+## 選填值
+
+欲使架構成為*選填值*（意即允許 `undefined` 值），使用 `optional` 方法：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.optional(z.literal("yoda")); // or z.literal("yoda").optional()
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.optional(z.literal("yoda"));
+```
+</Tab>
+</Tabs>
+
+這會回傳一個包覆原始架構的 `ZodOptional` 實例。欲擷取內部架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+optionalYoda.unwrap(); // ZodLiteral<"yoda">
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+optionalYoda.def.innerType; // ZodMiniLiteral<"yoda">
+```
+</Tab>
+</Tabs>
+
+## 可空型別
+
+設定架構為可空型別（意即允許 `null` 值），使用 `nullable` 方法：。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.nullable(z.literal("yoda")); // or z.literal("yoda").nullable()
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const nullableYoda = z.nullable(z.literal("yoda"));
+```
+</Tab>
+</Tabs>
+
+這會回傳一個包覆原始架構的 `ZodNullable` 實例。欲擷取內部架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+nullableYoda.unwrap(); // ZodLiteral<"yoda">
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+nullableYoda.def.innerType; // ZodMiniLiteral<"yoda">
+```
+</Tab>
+</Tabs>
+
+## 類空型別（nullish）
+
+欲使架構轉為「*類空型別*」（nullish），意即選填又可空的型別：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const nullishYoda = z.nullish(z.literal("yoda"));
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const nullishYoda = z.nullish(z.literal("yoda"));
+```
+</Tab>
+</Tabs>
+
+更多關於[類空型別](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#nullish-coalescing)的概念，請參考 TypeScript 手冊。
+
+## 未知型別（Unknown）
+
+Zod 旨在逐一反映 TypeScript 的型別系統，因此 Zod 提供以下 API 來表示特殊的型別：
+
+```ts
+// allows any values
+z.any(); // inferred type: `any`
+z.unknown(); // inferred type: `unknown`
+```
+
+## Never 型別
+
+任何值都無法通過驗證。
+
+```ts
+z.never(); // inferred type: `never`
+```
+
+## 物件
+
+欲定義一個物件的型別：
+
+```ts z.object
+  const Person = z.object({
+    name: z.string(),
+    age: z.number(),
+  });
+
+  type Person = z.infer<typeof Person>;
+  // => { name: string; age: number; }
+  ```
+預設情況下，所有屬性都是必填的，若要使屬性設為選填：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts z.object
+const Dog = z.object({
+  name: z.string(),
+  age: z.number().optional(),
+});
+
+Dog.parse({ name: "Yeller" }); // ✅
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts z.object
+const Dog = z.object({
+  name: z.string(),
+  age: z.optional(z.number())
+});
+
+Dog.parse({ name: "Yeller" }); // ✅
+```
+</Tab>
+</Tabs>
+
+
+
+預設情況下，未識別（未定義）鍵會從解析結果中剔除：
+
+```ts z.object
+Dog.parse({ name: "Yeller", extraKey: true });
+// => { name: "Yeller" }
+```
+
+### 嚴格物件（`z.strictObject` 方法）
+
+欲定義一個*嚴格*的物件架構，當有未定義鍵時則會拋出錯誤：
+
+```ts z.object
+const StrictDog = z.strictObject({
+  name: z.string(),
+});
+
+StrictDog.parse({ name: "Yeller", extraKey: true });
+// ❌ throws
+```
+
+### 寬鬆物件（`z.looseObject` 方法）
+
+欲定義*鬆散*的架構來允許未定義鍵通過驗證機制：
+
+```ts z.object
+const LooseDog = z.looseObject({
+  name: z.string(),
+});
+
+LooseDog.parse({ name: "Yeller", extraKey: true });
+// => { name: "Yeller", extraKey: true }
+```
+
+### 捕捉錯誤（`.catchall()` 方法）
+
+定義一個*捕捉錯誤的架構*來驗證任何未定義鍵：
+
+
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts z.object
+const DogWithStrings = z.object({
+  name: z.string(),
+  age: z.number().optional(),
+}).catchall(z.string());
+
+DogWithStrings.parse({ name: "Yeller", extraKey: "extraValue" }); // ✅
+DogWithStrings.parse({ name: "Yeller", extraKey: 42 }); // ❌
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts z.object
+const DogWithStrings = z.catchall(
+  z.object({
+    name: z.string(),
+    age: z.number().optional(),
+  }),
+  z.string()
+);
+
+DogWithStrings.parse({ name: "Yeller", extraKey: "extraValue" }); // ✅
+DogWithStrings.parse({ name: "Yeller", extraKey: 42 }); // ❌
+```
+</Tab>
+</Tabs>
+
+
+### 存取架構（`.shape` 方法）
+
+欲存取內部架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+Dog.shape.name; // => string schema
+Dog.shape.age; // => number schema
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+Dog.def.shape.name; // => string schema
+Dog.def.shape.age; // => number schema
+```
+</Tab>
+</Tabs>
+
+### 存取鍵值（`.keyof()` 方法）
+
+To create a `ZodEnum` schema from the keys of an object schema:
+從物件架構的鍵中建立一個 `ZodEnum` 架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const keySchema = Dog.keyof();
+// => ZodEnum<["name", "age"]>
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const keySchema = z.keyof(Dog);
+// => ZodEnum<["name", "age"]>
+```
+</Tab>
+</Tabs>
+
+### 架構擴充（`.extend()` 方法）
+
+欲在物件架構中加入額外的欄位：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const DogWithBreed = Dog.extend({
+  breed: z.string(),
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const DogWithBreed = z.extend(Dog, {
+  breed: z.string(),
+});
+```
+</Tab>
+</Tabs>
+
+This API can be used to overwrite existing fields! Be careful with this power! If the two schemas share keys, B will override A.
+此 API 可用來覆寫現有欄位，請小心使用此功能！若兩個架構有共用鍵，B 會覆蓋 A。
+
+<Callout>
+** 替代方案：展開語法（spread syntax）** - 可以避免使用 `.extend()` 方法來建立新的物件架構，這會使架構的嚴格程度一目了然。
+
+```ts
+const DogWithBreed = z.object({ // or z.strictObject() or z.looseObject()...
+  ...Dog.shape,
+  breed: z.string(),
+});
+```
+
+也可以使用此功能一次合併多個物件。
+
+```ts
+const DogWithBreed = z.object({
+  ...Animal.shape,
+  ...Pet.shape,
+  breed: z.string(),
+});
+```
+
+此方法有以下優點：
+
+1.它使用語言層級的功能：([展開語法](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax))，而非特定於函式庫的 API
+2. 相同的語法適用於 Zod 和 Zod Mini
+3. 在 `tsc` 解析上更有效率 —— `.extend()` 方法在大型架構上可能提升效能成本，而且由於[TypeScript 的限制](https://github.com/microsoft/TypeScript/pull/61505)，當呼叫被串連（chained）時，其效能成本會以2倍數增長。
+4. 也可使用 `z.strictObject()` 或 `z.looseObject()` 來改變架構的嚴謹程度。
+</Callout>
+
+### 安全擴充（`.safeExtend()` 方法）
+
+`.safeExtend()` 方法的工作原理與 `.extend()` 相似，但它不會讓你用不可賦值的架構覆寫現有的屬性。換句話說，安全擴充的結果會推論出繼承（[`extends`](https://www.typescriptlang.org/docs/handbook/2/conditional-types.html#conditional-type-constraints) ）自原本的型別（在 TypeScript 上的型別限縮概念）。
+
+```ts
+z.object({ a: z.string() }).safeExtend({ a: z.string().min(5) }); // ✅
+z.object({ a: z.string() }).safeExtend({ a: z.any() }); // ✅
+z.object({ a: z.string() }).safeExtend({ a: z.number() });
+//                                       ^  ❌ ZodNumber is not assignable 
+```
+
+使用 `.safeExtend()` 方法來擴充包含精煉（`refine()` 方法）的架構。（一般的 `.extend()` 使用在包含精煉的架構裡會拋出錯誤）。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const Base = z.object({
+  a: z.string(),
+  b: z.string()
+}).refine(user => user.a === user.b);
+
+// Extended inherits the refinements of Base
+const Extended = Base.safeExtend({
+  a: z.string().min(10)
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const Base = z.object({
+  a: z.string(),
+  b: z.string()
+}).check(z.refine(user => user.a === user.b));
+
+// Extended inherits the refinements of Base
+const Extended = z.safeExtend(Base, {
+  a: z.string().min(10)
+});
+```
+</Tab>
+</Tabs>
+
+### 揀選（`.pick()` 方法）
+
+啟蒙於 TypeScript 內建的 `Pick` 和 `Omit` 工具型別，Zod 提供了專用的 API，用來從物件架構中挑選和省略特定的鍵。
+
+這是初始架構：
+
+```ts z.object
+const Recipe = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  ingredients: z.array(z.string()),
+});
+// { title: string; description?: string | undefined; ingredients: string[] }
+```
+挑選特定的鍵：
+
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const JustTheTitle = Recipe.pick({ title: true });
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const JustTheTitle = z.pick(Recipe, { title: true });
+```
+</Tab>
+</Tabs>
+
+
+### 忽略（`.omit()` 方法）
+
+欲忽略某些鍵：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const RecipeNoId = Recipe.omit({ id: true });
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const RecipeNoId = z.omit(Recipe, { id: true });
+```
+</Tab>
+</Tabs>
+
+
+### 選填化（`.partial()` 方法）
+
+為了方便起見，Zod 提供了一個專用的 API 來讓某些或所有的屬性成為選填的，啟發於 TypeScript 內建的工具型別 [`Partial`](https://www.typescriptlang.org/docs/handbook/utility-types.html#partialtype)。
+
+
+欲使所有欄位改成選填值：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const PartialRecipe = Recipe.partial();
+// { title?: string | undefined; description?: string | undefined; ingredients?: string[] | undefined }
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const PartialRecipe = z.partial(Recipe);
+// { title?: string | undefined; description?: string | undefined; ingredients?: string[] | undefined }
+```
+</Tab>
+</Tabs>
+
+欲使部分欄位改成選填值：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const RecipeOptionalIngredients = Recipe.partial({
+  ingredients: true,
+});
+// { title: string; description?: string | undefined; ingredients?: string[] | undefined }
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const RecipeOptionalIngredients = z.partial(Recipe, {
+  ingredients: true,
+});
+// { title: string; description?: string | undefined; ingredients?: string[] | undefined }
+```
+</Tab>
+</Tabs>
+
+### 必填化（`.required()` 方法）
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const RequiredRecipe = Recipe.required();
+// { title: string; description: string; ingredients: string[] }
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const RequiredRecipe = z.required(Recipe);
+// { title: string; description: string; ingredients: string[] }
+```
+</Tab>
+</Tabs>
+
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts zod
+const RecipeRequiredDescription = Recipe.required({description: true});
+// { title: string; description: string; ingredients: string[] }
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const RecipeRequiredDescription = z.required(Recipe, {description: true});
+// { title: string; description: string; ingredients: string[] }
+```
+</Tab>
+</Tabs>
+
+
+
+## 遞迴（循環參照）物件
+
+欲定義自我參照式型別，請使用 [getter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get) 函式的關鍵字，這讓 JavaScript 在執行期時解析循環架構。
+
+```ts
+const Category = z.object({
+  name: z.string(),
+  get subcategories(){
+    return z.array(Category)
+  }
+});
+
+type Category = z.infer<typeof Category>;
+// { name: string; subcategories: Category[] }
+```
+
+<Callout type="warn"> 
+  雖然支援遞迴架構，但將循環資料傳入 Zod 會導致無限迴圈。
+</Callout>
+
+也可以使用*相互遞迴型別（mutually recursive types）*：
+
+```ts
+const User = z.object({
+  email: z.email(),
+  get posts(){
+    return z.array(Post)
+  }
+});
+
+const Post = z.object({
+  title: z.string(),
+  get author(){
+    return User
+  }
+});
+```
+
+所有物件 API（`.pick()`、`.omit()`、`.required()`、`.partial()` 等方法）都會如預期般運作。
+
+### 循環參照錯誤（Circularity errors）
+
+由於 TypeScript 的限制，遞迴型別推論可能很微妙，它只在某些情況下有效。一些較複雜的型別可能會觸發遞迴型別錯誤：
+
+```ts
+const Activity = z.object({
+  name: z.string(),
+  get subactivities() {
+    // ^ ❌ 'subactivities' implicitly has return type 'any' because it does not
+    // have a return type annotation and is referenced directly or indirectly
+    // in one of its return expressions.ts(7023)
+
+    return z.nullable(z.array(Activity));
+  },
+});
+```
+
+在此情境下，可以在出錯的 getter 函式上使用型別註解來解決錯誤：
+
+```ts
+const Activity = z.object({
+  name: z.string(),
+  get subactivities(): z.ZodNullable<z.ZodArray<typeof Activity>> {
+    return z.nullable(z.array(Activity));
+  },
+});
+```
+
+{/* Some general rules of thumb for avoiding circularity  */}
+
+{/* 
+<Accordions>
+  <Accordion title="Resolving type errors in recursive schemas">
+    Recursive type inference can by mysterious. TypeScript is capable of it in certain limited scenarios. Depending on what you're trying to do, you may encounter errors like this:
+
+    ```ts
+    export const Activity = z.object({
+      name: z.string(),
+      get children() {
+        // ^ ❌ 'children' implicitly has return type 'any' because it does not 
+        // have a return type annotation and is referenced directly or indirectly 
+        // in one of its return expressions.ts(7023)
+
+        return z.optional(z.array(Activity)); //.optional();
+      },
+    });
+    ```
+
+    Here are a couple rules of thumb:
+
+    ### Object types only 
+    
+    Generally speaking, recursive inference only works with object types that are referencing each other. TypeScript has special handling for resolving getter-based recursive objects, which is what Zod relies on. If you try to add non-object types into the mix, you'll likely encounter errors.
+
+    ```ts
+    const Activity = z.object({
+      name: z.string(),
+      get children() { // ❌ type error
+        return z.optional(ActivityArray);
+      },
+    });
+
+    const ActivityArray = z.array(Activity);
+    ```
+
+    Sometimes you can get around this limitation by defining 
+
+
+    ### Avoid nesting function calls
+    
+    Functions like `z.array()` and `z.optional()` accept Zod schemas, so when you use them TypeScript will do some type-checking on their inputs to make sure they are valid. But type checking is the enemy of recursive type inference—it's hard for TypeScript to *check* and *infer* types at the same time. Methods do not have this problem, so prefer methods over functions when possible (sorry Zod Mini users).
+
+    ```ts
+    const Activity = z.object({
+      name: z.string(),
+      get subactivities() {
+        // ^ ❌ 'subactivities' implicitly has return type 'any' because it does not 
+        // have a return type annotation and is referenced directly or indirectly 
+        // in one of its return expressions.ts(7023)
+
+        return z.union([z.null(), Activity]);
+      },
+    });
+    ```
+
+    ### Fall back to type annotations on your getters
+    
+    When in doubt, you can generally sidestep these issues with some carefully deployed type annotations on your getters. Due to the limitations described above, this is particularly necessary when using Zod Mini.
+
+    ```ts
+    import * as z from "zod";
+
+    const Activity = z.object({
+      name: z.string(),
+      get subactivities(): z.ZodMiniDefault<z.ZodMiniArray<typeof Activity>> {
+        return z._default(z.array(Activity), []);
+      },
+    });
+    ```
+
+  </Accordion>
+</Accordions> */}
+
+## 陣列
+
+欲定義陣列架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const stringArray = z.array(z.string()); // or z.string().array()
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const stringArray = z.array(z.string());
+```
+</Tab>
+</Tabs>
+
+存取陣列元素的內部架構：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+stringArray.unwrap(); // => string schema
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+stringArray.def.element; // => string schema
+```
+</Tab>
+</Tabs>
+
+Zod 實作了許多陣列專用的驗證：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.array(z.string()).min(5); // must contain 5 or more items
+z.array(z.string()).max(5); // must contain 5 or fewer items
+z.array(z.string()).length(5); // must contain 5 items exactly
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.array(z.string()).check(z.minLength(5)); // must contain 5 or more items
+z.array(z.string()).check(z.maxLength(5)); // must contain 5 or fewer items
+z.array(z.string()).check(z.length(5)); // must contain 5 items exactly
+```
+</Tab>
+</Tabs>
+
+{/* Unlike `.nonempty()` these methods do not change the inferred type. */}
+
+## 元組
+
+與陣列不同，元組是典型的固定長度陣列，其為每個索引定義不同的架構。
+
+```ts
+const MyTuple = z.tuple([
+  z.string(),
+  z.number(),
+  z.boolean()
+]);
+
+type MyTuple = z.infer<typeof MyTuple>;
+// [string, number, boolean]
+```
+
+新增一個可變參數引數（variadic argument）中的 "rest" 引數：
+
+```ts
+const variadicTuple = z.tuple([z.string()], z.number());
+// => [string, ...number[]];
+```
+
+## 聯集型別
+
+聯集型別（`A | B`）代表邏輯上的「或」（"OR"）。Zod 聯集架構會依序檢查每個選填的輸入值，最先驗證成功的值會回傳。
+
+```ts
+const stringOrNumber = z.union([z.string(), z.number()]);
+// string | number
+
+stringOrNumber.parse("foo"); // passes
+stringOrNumber.parse(14); // passes
+```
+
+欲從架構中擷取聯集可用值：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+stringOrNumber.options; // [ZodString, ZodNumber]
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+stringOrNumber.def.options; // [ZodString, ZodNumber]
+```
+</Tab>
+</Tabs>
+
+{/* For convenience, you can also use the [`.or` method](#or):
+
+```ts
+const stringOrNumber = z.string().or(z.number());
+``` */}
+
+{/* **Optional string validation:**
+
+To validate an optional form input, you can union the desired string validation with an empty string [literal](#literals).
+
+This example validates an input that is optional but needs to contain a [valid URL](#strings):
+
+```ts
+const optionalUrl = z.union([z.string().url().nullish(), z.literal("")]);
+
+console.log(optionalUrl.safeParse(undefined).success); // true
+console.log(optionalUrl.safeParse(null).success); // true
+console.log(optionalUrl.safeParse("").success); // true
+console.log(optionalUrl.safeParse("https://zod.dev").success); // true
+console.log(optionalUrl.safeParse("not a valid url").success); // false
+```
+
+<br/> */}
+
+## 排他性聯集（XOR）
+
+排他性聯集（XOR）必須只能有一個選項符合的聯集。與任何選項匹配時都會成功的一般聯集不同，`z.xor()` 在零個選項匹配或多個選項匹配時都會失敗。
+
+```ts
+const schema = z.xor([z.string(), z.number()]);
+
+schema.parse("hello"); // ✅ passes
+schema.parse(42);      // ✅ passes
+schema.parse(true);    // ❌ fails (zero matches)
+```
+
+這在確保各聯集選項的互斥性時非常有用：
+
+```ts
+// Validate that exactly ONE of these matches
+const payment = z.xor([
+  z.object({ type: z.literal("card"), cardNumber: z.string() }),
+  z.object({ type: z.literal("bank"), accountNumber: z.string() }),
+]);
+
+payment.parse({ type: "card", cardNumber: "1234" }); // ✅ passes
+```
+
+若輸入值可以匹配多個選填的選項，`z.xor()` 將會失敗：
+
+```ts
+const overlapping = z.xor([z.string(), z.any()]);
+overlapping.parse("hello"); // ❌ fails (matches both string and any)
+```
+
+
+## 鑑別式聯集（discriminated union）
+
+一個[鑑別式聯集（discriminated union）](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)是一種特殊的聯集形式，其一，所有的聯集選項都是物件架構；其二，共用一個特定的鍵值（鑑別者，"discriminator"）。基於鑑別者的值讓 TypeScript 能夠「限縮」型別簽章。
+
+```ts
+type MyResult =
+  | { status: "success"; data: string }
+  | { status: "failed"; error: string };
+
+function handleResult(result: MyResult){
+  if(result.status === "success"){
+    result.data; // string
+  } else {
+    result.error; // string
+  }
+}
+```
+
+當然也可以用一般的 `z.union()` 來表示。但正規聯集比較*簡單粗暴*——它們會依序檢查每個選填的輸入值，然後回傳第一個通過的選項，這對於大型的聯集會影響效能。
+
+因此，Zod 提供了一個 `z.discriminatedUnion()` API，使用 *鑑別鍵*（discriminator key）來使解析更有效率。
+
+
+```ts
+const MyResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("success"), data: z.string() }),
+  z.object({ status: z.literal("failed"), error: z.string() }),
+]);
+```
+
+每個選項應該是一個*物件架構*，且其鑑別欄位（例如上例中的`status` 欄位）對應自某個實字值，或一組值，通常是：`z.enum()`、`z.literal()`、`z.null()` 或 `z.undefined()`。
+
+{/* 
+<Callout>
+  In Zod 3, you were required to specify the discriminator key as the first argument. This is no longer necessary, as Zod can now automatically detect the discriminator key.
+
+  ```ts
+  const MyResult = z.discriminatedUnion("status", [
+    z.object({ status: z.literal("success"), data: z.string() }),
+    z.object({ status: z.literal("failed"), error: z.string() }),
+  ]);
+  ```
+
+  If Zod can't find a discriminator key, it will throw an error at schema creation time.
+</Callout> */}
+
+<Accordions type="single">
+<Accordion title="Nesting discriminated unions">
+
+  For advanced use cases, discriminated unions can be nested. Zod will figure out the optimal parsing strategy to leverage the discriminators at each level.
+
+  ```ts
+  const BaseError = { status: z.literal("failed"), message: z.string() };
+  const MyErrors = z.discriminatedUnion("code", [
+    z.object({ ...BaseError, code: z.literal(400) }),
+    z.object({ ...BaseError, code: z.literal(401) }),
+    z.object({ ...BaseError, code: z.literal(500) }),
+  ]);
+
+  const MyResult = z.discriminatedUnion("status", [
+    z.object({ status: z.literal("success"), data: z.string() }),
+    MyErrors
+  ]);
+  ```
+
+</Accordion>
+</Accordions>
+
+
+## 交集
+
+交集型別（`A & B`）代表邏輯上的 "AND"。
+
+```ts
+const a = z.union([z.number(), z.string()]);
+const b = z.union([z.number(), z.boolean()]);
+const c = z.intersection(a, b);
+
+type c = z.infer<typeof c>; // => number
+```
+
+這對於兩個物件型別的交集很實用。
+
+```ts
+const Person = z.object({ name: z.string() });
+type Person = z.infer<typeof Person>;
+
+const Employee = z.object({ role: z.string() });
+type Employee = z.infer<typeof Employee>;
+
+const EmployedPerson = z.intersection(Person, Employee);
+type EmployedPerson = z.infer<typeof EmployedPerson>;
+// Person & Employee
+```
+
+<Callout type="warn">
+  當合併物件架構時，請使用 [`A.extend(B)`](#extend)，而非交集。使用`.extend()` 會得到一個新的物件架構，而 `z.intersection(A, B)` 會回傳一個 `ZodIntersection` 實例，這個實例缺乏常用的物件方法，例如 `pick` 和 `omit`。
+</Callout>
+
+## Records
+
+Record 架構用於驗證例如：`Record<string,string>` 的型別。
+
+### `z.record` 方法
+
+```ts
+const IdCache = z.record(z.string(), z.string());
+type IdCache = z.infer<typeof IdCache>; // Record<string, string>
+
+IdCache.parse({
+  carlotta: "77d2586b-9e8e-4ecf-8b21-ea7e0530eadd",
+  jimmie: "77d2586b-9e8e-4ecf-8b21-ea7e0530eadd",
+});
+```
+
+「鍵」的架構可以是任何可賦值給 `string | number | symbol` 的 Zod 架構。
+
+```ts
+const Keys = z.union([z.string(), z.number(), z.symbol()]);
+const AnyObject = z.record(Keys, z.unknown());
+// Record<string | number | symbol, unknown>
+```
+
+欲建立包含由列舉定義的鍵，其物件架構如下：
+
+```ts
+const Keys = z.enum(["id", "name", "email"]);
+const Person = z.record(Keys, z.string());
+// { id: string; name: string; email: string }
+```
+
+### `z.partialRecord` 方法
+
+
+<Callout>
+  **Zod 4** - 在 Zod 4 中，若傳入一個 `z.enum` 作為 `z.record()` 的第一個參數，Zod 將會窮盡（exhaustively）檢查輸入值的鍵值是否存在於列舉值中，此舉與 TypeScript 的行為一致：
+
+  ```ts
+  type MyRecord = Record<"a" | "b", string>;
+  const myRecord: MyRecord = { a: "foo", b: "bar" }; // ✅
+  const myRecord: MyRecord = { a: "foo" }; // ❌ missing required key `b`
+  ```
+
+  在 Zod 3 中，並沒有做窮盡檢查，若要重現舊行為，請使用 `z.partialRecord()` 方法。
+
+</Callout>
+
+若想要*局部的* Record 型別，請使用 `z.partialRecord()` 方法。使用此方法會略過 Zod 在鍵值上使用 `z.enum()` 和 `z.literal()` 之架構所執行的窮盡檢查。
+
+```ts
+const Keys = z.enum(["id", "name", "email"]).or(z.never()); 
+const Person = z.partialRecord(Keys, z.string());
+// { id?: string; name?: string; email?: string }
+```
+
+### `z.looseRecord` 方法
+
+
+```ts
+const schema = z.object({ name: z.string() }).passthrough()
+  .and(z.looseRecord(z.string().regex(/^S_/), z.string()))
+  .and(z.looseRecord(z.string().regex(/^N_/), z.number()));
+
+schema.parse({ 
+  name: "John",
+  other: "value",    // passes through unchanged
+  S_foo: "bar",     // validated as string
+  N_count: 123,     // validated as number
+});
+```
+
+<Accordions>
+<Accordion title="A note on numeric keys">
+
+雖然 TypeScript 提供定義具數值「鍵」之 Record 型別（例：`Record<number,unknown>`），然而實際上數值鍵並不存在於 JavaScript 中，JavaScript 會將所有數值的鍵轉換為字串。
+
+```ts
+const myObject = { 1: "one" };
+
+Object.keys(myObject); 
+// => ["1"]
+```
+
+如上例所示，JavaScript 引擎會自動將所有數值的鍵轉換成字串，因此，在 `z.record()` 內使用 `z.number()` 做為鍵的架構，在解析時總會拋出錯誤，但為了與 TypeScript 的型別系統保持一致，Zod仍默許這樣做。
+
+</Accordion></Accordions>
+
+## Map
+
+```ts
+const StringNumberMap = z.map(z.string(), z.number());
+type StringNumberMap = z.infer<typeof StringNumberMap>; // Map<string, number>
+
+const myMap: StringNumberMap = new Map();
+myMap.set("one", 1);
+myMap.set("two", 2);
+
+StringNumberMap.parse(myMap);
+```
+
+## Set
+
+```ts
+const NumberSet = z.set(z.number());
+type NumberSet = z.infer<typeof NumberSet>; // Set<number>
+
+const mySet: NumberSet = new Set();
+mySet.add(1);
+mySet.add(2);
+NumberSet.parse(mySet);
+```
+
+可使用下列實用方法進一步約束 Set 架構。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.set(z.string()).min(5); // must contain 5 or more items
+z.set(z.string()).max(5); // must contain 5 or fewer items
+z.set(z.string()).size(5); // must contain 5 items exactly
+```
+</Tab>
+<Tab value='Zod Mini'>
+```ts
+z.set(z.string()).check(z.minSize(5)); // must contain 5 or more items
+z.set(z.string()).check(z.maxSize(5)); // must contain 5 or fewer items
+z.set(z.string()).check(z.size(5)); // must contain 5 items exactly
+```
+</Tab>
+</Tabs>
+
+## 檔案
+
+驗證 `File` 實例：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const fileSchema = z.file();
+
+fileSchema.min(10_000); // minimum .size (bytes)
+fileSchema.max(1_000_000); // maximum .size (bytes)
+fileSchema.mime("image/png"); // MIME type
+fileSchema.mime(["image/png", "image/jpeg"]); // multiple MIME types
+```
+
+</Tab>
+<Tab value='Zod Mini'>
+```ts
+const fileSchema = z.file();
+
+fileSchema.check(
+  z.minSize(10_000), // minimum .size (bytes)
+  z.maxSize(1_000_000), // maximum .size (bytes)
+  z.mime("image/png"), // MIME type
+  z.mime(["image/png", "image/jpeg"]); // multiple MIME types
+)
+```
+</Tab>
+</Tabs>
+
+## Promise
+
+<Callout type="warn">
+  **棄用** - `z.promise()` 在 Zod 4 中已被棄用。Promise 架構使用案例非常稀少。若懷疑一個值可能是一個 `Promise`，只需要在解析前先 `await` 它。
+</Callout>
+
+<Accordions type="single"><Accordion title="See z.promise() documentation">
+
+```ts
+const numberPromise = z.promise(z.number());
+```
+
+對於 Promise 架構，「解析」的運作方式有點不同。驗證分為兩部分：
+
+1. Zod 同步地檢查輸入值是否為 Promise 的實例（即具有 `.then` 和 `.catch` 方法的物件）。
+2. Zod 使用 `.then` 將額外的驗證步驟附加到現有的 Promise 上，此外您必須在回傳的 Promise 上使用 `.catch` 來處理驗證失敗的情境。
+
+```ts
+numberPromise.parse("tuna");
+// ZodError: Non-Promise type: string
+
+numberPromise.parse(Promise.resolve("tuna"));
+// => Promise<number>
+
+const test = async () => {
+  await numberPromise.parse(Promise.resolve("tuna"));
+  // ZodError: Non-number type: string
+
+  await numberPromise.parse(Promise.resolve(3.14));
+  // => 3.14
+};
+```
+
+</Accordion></Accordions>
+
+## Instanceof
+
+您可以使用 `z.instanceof` 來檢查輸入值是否屬於某類別的實例，這對驗證第三方函式庫的類別之輸入值來說非常有用。
+
+```ts
+class Test {
+  name: string;
+}
+
+const TestSchema = z.instanceof(Test);
+
+TestSchema.parse(new Test()); // ✅
+TestSchema.parse("whatever"); // ❌
+```
+
+### 類別屬性
+
+根據 Zod 架構來驗證類別之實體的特定屬性：
+
+```ts
+const blobSchema = z.instanceof(URL).check(
+  z.property("protocol", z.literal("https:" as string, "Only HTTPS allowed"))
+);
+
+blobSchema.parse(new URL("https://example.com")); // ✅
+blobSchema.parse(new URL("http://example.com")); // ❌
+```
+
+`z.property()` API 適用於任何資料型別（但與 `z.instanceof()` 搭配使用時最有成效）。
+
+```ts
+const blobSchema = z.string().check(
+  z.property("length", z.number().min(10))
+);
+
+blobSchema.parse("hello there!"); // ✅
+blobSchema.parse("hello."); // ❌
+```
+
+## 精煉（Refinement）
+
+任何 Zod 構架都會儲存一個*精煉*（Refinements）的陣列。精煉是撰寫自定義驗證邏輯地方。
+
+### `.refine()` 方法
+
+{/* <Callout>
+  Checks do not (in fact, cannot) change the inferred type of the schema.
+</Callout>
+
+### `.refine()` */}
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const myString = z.string().refine((val) => val.length <= 255);
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const myString = z.string().check(z.refine((val) => val.length <= 255));
+```
+</Tab>
+</Tabs>
+
+<Callout type="warn">
+  精煉函式絕不該拋出錯誤，相反地，它應回傳一個偽值來表示失敗，Zod 並不會捕捉拋出的錯誤。
+</Callout>
+
+#### `error` 屬性
+
+若要自訂錯誤訊息：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const myString = z.string().refine((val) => val.length > 8, { 
+  error: "Too short!" 
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const myString = z.string().check(
+  z.refine((val) => val.length > 8, { error: "Too short!" })
+);
+```
+</Tab>
+</Tabs>
+
+#### `abort` 屬性
+
+預設情況下，驗證後所收集到的問題會被視為*可續行性*（continuable）；意即 Zod 會依序執行*所有*檢查，即使其中一個檢查會造成驗證錯誤。這通常是可預期的，因為這表示 Zod 可以盡可能地一次顯示可能的錯誤。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const myString = z.string()
+  .refine((val) => val.length > 8, { error: "Too short!" })
+  .refine((val) => val === val.toLowerCase(), { error: "Must be lowercase" });
+  
+
+const result = myString.safeParse("OH NO");
+result.error?.issues;
+/* [
+  { "code": "custom", "message": "Too short!" },
+  { "code": "custom", "message": "Must be lowercase" }
+] */
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const myString = z.string().check(
+  z.refine((val) => val.length > 8, { error: "Too short!" }),
+  z.refine((val) => val === val.toLowerCase(), { error: "Must be lowercase" })
+);
+
+const result = z.safeParse(myString, "OH NO");
+result.error?.issues;
+/* [
+  { "code": "custom", "message": "Too short!" },
+  { "code": "custom", "message": "Must be lowercase" }
+] */
+```
+</Tab>
+</Tabs>
+
+
+若需要將精煉標記為*不可續行性*（non-continuable），請加入 `abort` 參數。若檢查失敗，驗證將會終止。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const myString = z.string()
+  .refine((val) => val.length > 8, { error: "Too short!", abort: true })
+  .refine((val) => val === val.toLowerCase(), { error: "Must be lowercase", abort: true });
+
+
+const result = myString.safeParse("OH NO");
+result.error?.issues;
+// => [{ "code": "custom", "message": "Too short!" }]
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const myString = z.string().check(
+  z.refine((val) => val.length > 8, { error: "Too short!", abort: true }),
+  z.refine((val) => val === val.toLowerCase(), { error: "Must be lowercase", abort: true })
+);
+
+const result = z.safeParse(myString, "OH NO");
+result.error?.issues;
+// [ { "code": "custom", "message": "Too short!" }]
+```
+</Tab>
+</Tabs>
+
+#### `path` 屬性
+
+若要自訂錯誤路徑，請使用 `path` 參數，這通常只在物件架構的脈絡中使用到。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const passwordForm = z
+  .object({
+    password: z.string(),
+    confirm: z.string(),
+  })
+  .refine((data) => data.password === data.confirm, {
+    message: "Passwords don't match",
+    path: ["confirm"], // path of error
+  });
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const passwordForm = z
+  .object({
+    password: z.string(),
+    confirm: z.string(),
+  })
+  .check(z.refine((data) => data.password === data.confirm, {
+    message: "Passwords don't match",
+    path: ["confirm"], // path of error
+  }));
+```
+</Tab>
+</Tabs>
+
+
+這將標記在相關問題中的 `path` 參數：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const result = passwordForm.safeParse({ password: "asdf", confirm: "qwer" });
+result.error.issues;
+/* [{
+  "code": "custom",
+  "path": [ "confirm" ],
+  "message": "Passwords don't match"
+}] */
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const result = z.safeParse(passwordForm, { password: "asdf", confirm: "qwer" });
+result.error.issues;
+/* [{
+  "code": "custom",
+  "path": [ "confirm" ],
+  "message": "Passwords don't match"
+}] */
+```
+</Tab>
+</Tabs>
+
+欲定義非同步的精煉，只需傳入一個非同步函式：
+
+```ts
+const userId = z.string().refine(async (id) => {
+  // verify that ID exists in database
+  return true;
+});
+```
+
+<Callout>
+  若使用非同步精煉，則必須使用非同步版本的解析：`.parseAsync` 方法來解析資料！否則 Zod 會拋出錯誤。
+
+  <Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+  <Tab value="Zod">
+  ```ts
+  const result = await userId.parseAsync("abc123");
+  ```
+  </Tab>
+  <Tab value="Zod Mini">
+  ```ts
+  const result = await z.parseAsync(userId, "abc123");
+  ```
+  </Tab>
+  </Tabs>
+</Callout>
+
+#### `when` 方法
+
+> **注意** - 這是進階使用者的功能，請謹慎使用，以免增加精煉內部產生不可預期錯誤的可能性。
+
+預設情況下，若已遇到任何*不可續行性*（non-continuable）的問題，精煉就不會執行。在將值傳入任何精煉函式之前，Zod 會小心確保值的型別簽章是正確的。
+
+```ts
+const schema = z.string().refine((val) => {
+  return val.length > 8
+});
+
+schema.parse(1234); // invalid_type: refinement won't be executed
+```
+
+在某些情境下，若想要更精細地控制精煉執行的時間，例如：「輸入密碼確認」的檢查：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const schema = z
+  .object({
+    password: z.string().min(8),
+    confirmPassword: z.string(),
+    anotherField: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+schema.parse({
+  password: "asdf",
+  confirmPassword: "asdf",
+  anotherField: 1234 // ❌ this error will prevent the password check from running
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const schema = z
+  .object({
+    password: z.string().check(z.minLength(8)),
+    confirmPassword: z.string(),
+    anotherField: z.string(),
+  })
+  .check(z.refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  }));
+
+schema.parse({
+  password: "asdf",
+  confirmPassword: "asdf",
+  anotherField: 1234 // ❌ this error will prevent the password check from running
+});
+```
+</Tab>
+</Tabs>
+
+發生在 `anotherField` 上的錯誤會阻斷精煉中邏輯驗證區塊的執行，儘管該部分邏輯並不相依於 `anotherField` 欄位。欲控制精煉何時執行，請使用 `when` 參數：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const schema = z
+  .object({
+    password: z.string().min(8),
+    confirmPassword: z.string(),
+    anotherField: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+
+    // run if password & confirmPassword are valid
+    when(payload) { // [!code ++]
+      return schema // [!code ++]
+        .pick({ password: true, confirmPassword: true }) // [!code ++]
+        .safeParse(payload.value).success; // [!code ++]
+    },  // [!code ++]
+  });
+
+schema.parse({
+  password: "asdf",
+  confirmPassword: "asdf",
+  anotherField: 1234 // ❌ this error will not prevent the password check from running
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const schema = z
+  .object({
+    password: z.string().min(8),
+    confirmPassword: z.string(),
+    anotherField: z.string(),
+  })
+  .check(z.refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+    when(payload) { // [!code ++]
+      // no issues with `password` or `confirmPassword` // [!code ++]
+      return payload.issues.every((iss) => { // [!code ++]
+        const firstPathEl = iss.path?.[0]; // [!code ++]
+        return firstPathEl !== "password" && firstPathEl !== "confirmPassword"; // [!code ++]
+      }); // [!code ++]
+    },  // [!code ++]
+  }));
+
+schema.parse({
+  password: "asdf",
+  confirmPassword: "asdf",
+  anotherField: 1234 // ❌ this error will prevent the password check from running
+});
+```
+</Tab>
+</Tabs>
+
+
+### `.superRefine()` 方法
+
+一般的 `.refine` API 只會回報單一驗證問題，並附有 `"custom"` 錯誤代碼，但 `.superRefine()` 則可以使用 Zod 的任何[內部問題型別（internal issue types）](https://github.com/colinhacks/zod/blob/main/packages/zod/src/v4/core/errors.ts)，並建立多個問題。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const UniqueStringArray = z.array(z.string()).superRefine((val, ctx) => {
+  if (val.length > 3) {
+    ctx.addIssue({
+      code: "too_big",
+      maximum: 3,
+      origin: "array",
+      inclusive: true,
+      message: "Too many items 😡",
+      input: val,
+    });
+  }
+
+  if (val.length !== new Set(val).size) {
+    ctx.addIssue({
+      code: "custom",
+      message: `No duplicates allowed.`,
+      input: val,
+    });
+  }
+});
+
+
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const UniqueStringArray = z.array(z.string()).check(
+  z.superRefine((val, ctx) => {
+    if (val.length > 3) {
+      ctx.addIssue({
+        code: "too_big",
+        maximum: 3,
+        origin: "array",
+        inclusive: true,
+        message: "Too many items 😡",
+        input: val,
+      });
+    }
+
+    if (val.length !== new Set(val).size) {
+      ctx.addIssue({
+        code: "custom",
+        message: `No duplicates allowed.`,
+        input: val,
+      });
+    }
+  })
+);
+```
+</Tab>
+</Tabs>
+
+### `.check()` 方法
+
+<Callout>
+**注意** - `.check()` API 是一個更底層的 API，通常比 `.superRefine()` 更複雜。在針對需要效能調教的程式碼片段中，它可能會更快，但同時也更冗長。
+</Callout>
+
+<Accordions>
+<Accordion title="View example">
+`.refine()` 方法為建立在 `.check()` 之上的語法糖，其功能更強大（且冗長）。可以使用此 API 在單一精煉中建立多個問題，或完全控制驗證問題物件。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const UniqueStringArray = z.array(z.string()).check((ctx) => {
+  if (ctx.value.length > 3) {
+    // full control of issue objects
+    ctx.issues.push({
+      code: "too_big",
+      maximum: 3,
+      origin: "array",
+      inclusive: true,
+      message: "Too many items 😡",
+      input: ctx.value
+    });
+  }
+
+  // create multiple issues in one refinement
+  if (ctx.value.length !== new Set(ctx.value).size) {
+    ctx.issues.push({
+      code: "custom",
+      message: `No duplicates allowed.`,
+      input: ctx.value,
+      continue: true // make this issue continuable (default: false)
+    });
+  }
+});
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const UniqueStringArray = z.array(z.string()).check((ctx) => {
+  // full control of issue objects
+  if (ctx.value.length > 3) {
+    ctx.issues.push({
+      code: "too_big",
+      maximum: 3,
+      origin: "array",
+      inclusive: true,
+      message: "Too many items 😡",
+      input: ctx.value
+    });
+  }
+
+// create multiple issues in one refinement
+  if (ctx.value.length !== new Set(ctx.value).size) {
+    ctx.issues.push({
+      code: "custom",
+      message: `No duplicates allowed.`,
+      input: ctx.value,
+      continue: true // make this issue continuable (default: false)
+    });
+  }
+});
+```
+</Tab>
+</Tabs>
+</Accordion>
+</Accordions>
+
+## 編解碼器
+
+> **新功能** - 於 Zod 4.1 版本推出，更多資訊請參閱[編解碼器](/codecs) 頁面。
+
+編解碼器是一種特殊的架構，可在兩個其他架構之間實現*雙向轉換*。
+
+```ts
+const stringToDate = z.codec(
+  z.iso.datetime(),  // input schema: ISO date string
+  z.date(),          // output schema: Date object
+  {
+    decode: (isoString) => new Date(isoString), // ISO string → Date
+    encode: (date) => date.toISOString(),       // Date → ISO string
+  }
+);
+```
+
+一般的 `.parse()` 流程會執行*正向轉換*，它會呼叫變解碼器中的 `decode` 函式。
+
+```ts
+stringToDate.parse("2024-01-15T10:30:00.000Z"); // => Date
+```
+
+也可以使用頂層的 `z.decode()` 函式。與 `.parse()`（接受 `unknown` 輸入值）不同之處在於，`z.decode()` 期望強型別的輸入值（上例中為 `string`）。
+
+```ts
+z.decode(stringToDate, "2024-01-15T10:30:00.000Z"); // => Date
+```
+
+若要執行*逆向轉換*，請使用逆向的方法：z.encode()`。
+
+```ts
+z.encode(stringToDate, new Date("2024-01-15")); // => "2024-01-15T00:00:00.000Z"
+```
+
+如需詳細資訊，請參閱[編解碼器](/codecs)頁面，該頁面包含常用編解碼器的實作，可以直接複製/貼上至專案中：
+
+- [**`stringToNumber`**](/codecs#stringtonumber)
+- [**`stringToInt`**](/codecs#stringtoint)
+- [**`stringToBigInt`**](/codecs#stringtobigint)
+- [**`numberToBigInt`**](/codecs#numbertobigint)
+- [**`isoDatetimeToDate`**](/codecs#isodatetimetodate)
+- [**`epochSecondsToDate`**](/codecs#epochsecondstodate)
+- [**`epochMillisToDate`**](/codecs#epochmillistodate)
+- [**`jsonCodec`**](/codecs#jsoncodec)
+- [**`utf8ToBytes`**](/codecs#utf8tobytes)
+- [**`bytesToUtf8`**](/codecs#bytestoutf8)
+- [**`base64ToBytes`**](/codecs#base64tobytes)
+- [**`base64urlToBytes`**](/codecs#base64urltobytes)
+- [**`hexToBytes`**](/codecs#hextobytes)
+- [**`stringToURL`**](/codecs#stringtourl)
+- [**`stringToHttpURL`**](/codecs#stringtohttpurl)
+- [**`uriComponent`**](/codecs#uricomponent)
+- [**`stringToBoolean`**](/codecs#stringtoboolean)
+
+## 管道（Pipe）
+
+架構可以串連成「管道」，管道通常與[變形方法](#transforms)一同使用。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const stringToLength = z.string().pipe(z.transform(val => val.length));
+
+stringToLength.parse("hello"); // => 5
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const stringToLength = z.pipe(z.string(), z.transform(val => val.length));
+
+z.parse(stringToLength, "hello"); // => 5
+```
+</Tab>
+</Tabs>
+
+
+## 變形（Transform）
+
+> **注釋** - 若要進行雙向轉換，請使用[變解碼器](/codecs)。
+
+變形是一種特殊的架構，其執行單向的轉換。它們不驗證輸入值，而是接受任何資料，並對資料執行一些轉換。欲定義變形：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const castToString = z.transform((val) => String(val));
+
+castToString.parse("asdf"); // => "asdf"
+castToString.parse(123); // => "123"
+castToString.parse(true); // => "true"
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const castToString = z.transform((val) => String(val));
+
+z.parse(castToString, "asdf"); // => "asdf"
+z.parse(castToString, 123); // => "123"
+z.parse(castToString, true); // => "true"
+```
+</Tab>
+</Tabs>
+
+<Callout type="warn">
+  變形函式絕對不該拋出錯誤，Zod 並不會捕捉任何拋出的錯誤。
+</Callout>
+
+{/* The output type of the schema is inferred from the transform function:
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const castToString = z.transform((val) => String(val));
+
+type CastToString = z.infer<typeof castToString>; // string
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const castToString = z.transform((val) => String(val));
+
+type CastToString = z.infer<typeof castToString>; // string
+```
+</Tab>
+</Tabs> */}
+
+
+To perform validation logic inside a transform, use `ctx`. To report a validation issue, push a new issue onto `ctx.issues` (similar to the [`.check()`](#check) API).
+若要在變形中執行驗證邏輯，請使用 `ctx` 變數。若要回報驗證問題，請將新問題加入 `ctx.issues` 陣列中（類似於 [`.check()`](#check) API）。
+
+```ts
+const coercedInt = z.transform((val, ctx) => {
+  try {
+    const parsed = Number.parseInt(String(val));
+    return parsed;
+  } catch (e) {
+    ctx.issues.push({
+      code: "custom",
+      message: "Not a number",
+      input: val,
+    });
+
+    // this is a special constant with type `never`
+    // returning it lets you exit the transform without impacting the inferred return type
+    return z.NEVER;
+  }
+});
+```
+
+最常見的使用情境是，變形與[管道](#pipes)結合使用。這種組合有助於執行一些初始驗證，然後將解析後的資料轉換成另一種形式。
+
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const stringToLength = z.string().pipe(z.transform(val => val.length));
+
+stringToLength.parse("hello"); // => 5
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const stringToLength = z.pipe(z.string(), z.transform(val => val.length));
+
+z.parse(stringToLength, "hello"); // => 5
+```
+</Tab>
+</Tabs>
+
+### `.transform()` 方法
+
+將一些架構導入一個變形是一個常見的使用模式，所以 Zod 提供了一個方便的 `.transform()` 方法。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const stringToLength = z.string().transform(val => val.length); 
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+// no equivalent
+```
+</Tab>
+</Tabs>
+
+變形也可以是非同步的：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const idToUser = z
+  .string()
+  .transform(async (id) => {
+    // fetch user from database
+    return db.getUserById(id); 
+  });
+
+const user = await idToUser.parseAsync("abc123");
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const idToUser = z.pipe(
+  z.string(),
+  z.transform(async (id) => {
+    // fetch user from database
+    return db.getUserById(id); 
+  }));
+
+const user = await idToUser.parse("abc123");
+```
+</Tab>
+</Tabs>
+
+<Callout>
+  欲使用非同步變形，必須在解析資料時使用 `.parseAsync` 或 `.safeParseAsync` 方法！否則 Zod 會拋出錯誤。
+</Callout>
+
+### `.preprocess()` 方法
+
+將一個變形嫁接到另一個架構是另一種常見的模式，因此 Zod 提供了一個方便的 `z.preprocess()` 函式。
+
+```ts
+const coercedInt = z.preprocess((val) => {
+  if (typeof val === "string") {
+    return Number.parseInt(val);
+  }
+  return val;
+}, z.int());
+```
+
+## 預設值
+
+欲定義架構的預設值：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const defaultTuna = z.string().default("tuna");
+
+defaultTuna.parse(undefined); // => "tuna"
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const defaultTuna = z._default(z.string(), "tuna");
+
+defaultTuna.parse(undefined); // => "tuna"
+```
+</Tab>
+</Tabs>
+
+另一個替代方案是傳入一個函式，每當需要產生預設值時，此函式就會被重新執行：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const randomDefault = z.number().default(Math.random);
+
+randomDefault.parse(undefined);    // => 0.4413456736055323
+randomDefault.parse(undefined);    // => 0.1871840107401901
+randomDefault.parse(undefined);    // => 0.7223408162401552
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const randomDefault = z._default(z.number(), Math.random);
+
+z.parse(randomDefault, undefined); // => 0.4413456736055323
+z.parse(randomDefault, undefined); // => 0.1871840107401901
+z.parse(randomDefault, undefined); // => 0.7223408162401552
+```
+</Tab>
+</Tabs>
+
+
+## 預錯值（Prefaults）
+
+在 Zod 中，設定*預設值*會使解析過程短路。若輸入值是 `undefined`，預設值將主動地回傳。為此，預設值必須符合架構的*輸出型別*。
+
+```ts
+const schema = z.string().transform(val => val.length).default(0);
+schema.parse(undefined); // => 0
+```
+
+有時候定義*預錯值（Prefault）*（預先解析預設值）是很有用的。若輸入值為 `undefined`，則會改用預錯值來進行解析，解析過程中*不會*造成短路。因此，預錯值的型別必須符合*輸入值型別。
+
+```ts
+z.string().transform(val => val.length).prefault("tuna");
+schema.parse(undefined); // => 4
+```
+
+若想要傳入一些輸入值至「包含資料竄改邏輯」的精煉時格外有用。
+
+```ts
+const a = z.string().trim().toUpperCase().prefault("  tuna  ");
+a.parse(undefined); // => "TUNA"
+
+const b = z.string().trim().toUpperCase().default("  tuna  ");
+b.parse(undefined); // => "  tuna  "
+```
+
+## 後備值（Fallback）
+
+使用 `.catch()` 方法定義驗證錯誤時回傳的後備值：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const numberWithCatch = z.number().catch(42);
+
+numberWithCatch.parse(5); // => 5
+numberWithCatch.parse("tuna"); // => 42
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const numberWithCatch = z.catch(z.number(), 42);
+
+numberWithCatch.parse(5); // => 5
+numberWithCatch.parse("tuna"); // => 42
+```
+</Tab>
+</Tabs>
+
+
+亦可傳送一個函式，每當需要產生 catch 值時，該函式就會被執行。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const numberWithRandomCatch = z.number().catch((ctx) => {
+  ctx.error; // the caught ZodError
+  return Math.random();
+});
+
+numberWithRandomCatch.parse("sup"); // => 0.4413456736055323
+numberWithRandomCatch.parse("sup"); // => 0.1871840107401901
+numberWithRandomCatch.parse("sup"); // => 0.7223408162401552
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const numberWithRandomCatch = z.catch(z.number(), (ctx) => {
+  ctx.value;   // the input value
+  ctx.issues;  // the caught validation issue
+  return Math.random();
+});
+
+z.parse(numberWithRandomCatch, "sup"); // => 0.4413456736055323
+z.parse(numberWithRandomCatch, "sup"); // => 0.1871840107401901
+z.parse(numberWithRandomCatch, "sup"); // => 0.7223408162401552
+```
+</Tab>
+</Tabs>
+
+## 品牌型別（Branded types）
+
+TypeScript 的型別系統是[結構化的（structural）](https://www.typescriptlang.org/docs/handbook/type-compatibility.html)，意即兩個在結構上等同的型別被視為相同。
+
+```ts
+type Cat = { name: string };
+type Dog = { name: string };
+
+const pluto: Dog = { name: "pluto" };
+const simba: Cat = pluto; // works fine
+```
+
+在某些情況下，在 TypeScript 內模擬「[名義型別（nominal typing）](https://en.wikipedia.org/wiki/Nominal_type_system)」是可預期的。使用「*品牌型別*（branded type）」來實現，又稱為「不透明型別」（opaque type）。
+
+```ts
+const Cat = z.object({ name: z.string() }).brand<"Cat">();
+const Dog = z.object({ name: z.string() }).brand<"Dog">();
+
+type Cat = z.infer<typeof Cat>; // { name: string } & z.$brand<"Cat">
+type Dog = z.infer<typeof Dog>; // { name: string } & z.$brand<"Dog">
+
+const pluto = Dog.parse({ name: "pluto" });
+const simba: Cat = pluto; // ❌ not allowed
+```
+
+在實際的底層實作中，這透過附加一個「品牌」至架構的推論型別。
+
+```ts
+const Cat = z.object({ name: z.string() }).brand<"Cat">();
+type Cat = z.infer<typeof Cat>; // { name: string } & z.$brand<"Cat">
+```
+
+有了品牌屬性，任何無印（unbranded）的資料結構就不能再賦值給推論的型別。而必須使用構架解析某些資料，才能得到付品牌的資料。
+
+
+> 值得注意的是，品牌型別並不影響執行期 `.parse` 的結果。它僅是靜態的結構。
+
+## 唯讀
+
+將架構標記為唯讀：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const ReadonlyUser = z.object({ name: z.string() }).readonly();
+type ReadonlyUser = z.infer<typeof ReadonlyUser>;
+// Readonly<{ name: string }>
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const ReadonlyUser = z.readonly(z.object({ name: z.string() }));
+type ReadonlyUser = z.infer<typeof ReadonlyUser>;
+// Readonly<{ name: string }>
+```
+</Tab>
+</Tabs>
+
+新架構的推論型別將被標記為 `readonly`。請注意在 TypeScript 中，這只會影響物件、陣列、元組、`Set` 和 `Map`：
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+z.object({ name: z.string() }).readonly(); // { readonly name: string }
+z.array(z.string()).readonly(); // readonly string[]
+z.tuple([z.string(), z.number()]).readonly(); // readonly [string, number]
+z.map(z.string(), z.date()).readonly(); // ReadonlyMap<string, Date>
+z.set(z.string()).readonly(); // ReadonlySet<string>
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+z.readonly(z.object({ name: z.string() })); // { readonly name: string }
+z.readonly(z.array(z.string())); // readonly string[]
+z.readonly(z.tuple([z.string(), z.number()])); // readonly [string, number]
+z.readonly(z.map(z.string(), z.date())); // ReadonlyMap<string, Date>
+z.readonly(z.set(z.string())); // ReadonlySet<string>
+```
+</Tab>
+</Tabs>
+
+輸入值將會像平常一樣被解析，然後輸出結果會被 [`Object.freeze()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze) 凍結，以防止被修改。
+
+<Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
+<Tab value="Zod">
+```ts
+const result = ReadonlyUser.parse({ name: "fido" });
+result.name = "simba"; // throws TypeError
+```
+</Tab>
+<Tab value="Zod Mini">
+```ts
+const result = z.parse(ReadonlyUser, { name: "fido" });
+result.name = "simba"; // throws TypeError
+```
+</Tab>
+</Tabs>
+
+## JSON
+
+驗證任何 JSON 可編碼的值：
+
+```ts
+const jsonSchema = z.json();
+```
+
+這是一個便利的 API 回傳有以下聯集型別的架構：
+
+```ts
+const jsonSchema = z.lazy(() => {
+  return z.union([
+    z.string(params), 
+    z.number(), 
+    z.boolean(), 
+    z.null(), 
+    z.array(jsonSchema), 
+    z.record(z.string(), jsonSchema)
+  ]);
+});
+```
+
+
+
+## 函式
+
+Zod 提供了一個 `z.function()` 方法來定義 Zod 驗證函式。如此一來，就可避免將驗證代碼與商業邏輯混雜在一起。
+
+```ts
+const MyFunction = z.function({
+  input: [z.string()], // parameters (must be an array or a ZodTuple)
+  output: z.number()  // return type
+});
+
+type MyFunction = z.infer<typeof MyFunction>;
+// (input: string) => number
+```
+
+函式架構有一個 `.implement()` 方法，它接受一個函式，並回傳一個自動驗證其輸入和輸出資料的新函式。
+
+```ts
+const computeTrimmedLength = MyFunction.implement((input) => {
+  // TypeScript knows input is a string!
+  return input.trim().length;
+});
+
+computeTrimmedLength("sandwich"); // => 8
+computeTrimmedLength(" asdf "); // => 4
+```
+
+若輸入值無效，此函式會拋出 `ZodError` 錯誤：
+
+```ts
+computeTrimmedLength(42); // throws ZodError
+```
+
+若只關心輸入值的驗證，可省略 `output` 欄位。
+
+```ts
+const MyFunction = z.function({
+  input: [z.string()], // parameters (must be an array or a ZodTuple)
+});
+
+const computeTrimmedLength = MyFunction.implement((input) => input.trim.length);
+```
+
+
+使用 `.implementAsync()` 方法來建立一個非同步函式。
+
+```ts
+const computeTrimmedLengthAsync = MyFunction.implementAsync(
+  async (input) => input.trim().length
+);
+
+computeTrimmedLengthAsync("sandwich"); // => Promise<8>
+```
+
+## 自定義
+
+您可使用 `z.custom()` 為任何 TypeScript 型別建立 Zod 架構。這對於為 Zod 不支援的型別建立架構非常有用，例如：樣板字串實字。
+
+```ts
+const px = z.custom<`${number}px`>((val) => {
+  return typeof val === "string" ? /^\d+px$/.test(val) : false;
+});
+
+type px = z.infer<typeof px>; // `${number}px`
+
+px.parse("42px"); // "42px"
+px.parse("42vw"); // throws;
+```
+
+若不提供驗證函式，Zod 將允許任何值。而這可能會很危險！
+
+```ts
+z.custom<{ arg: string }>(); // performs no validation
+```
+
+您可透過傳入第二個參數，自訂錯誤訊息和其他選填的項目。這個參數的作用與 [`.refine`](#refine) 的 params 參數相同。
+
+```ts
+z.custom<...>((val) => ..., "custom error message");
+```
