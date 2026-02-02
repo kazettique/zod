@@ -71,8 +71,10 @@ export default async function Page(props: { params: Promise<{ slug: string }> })
   );
 }
 
-export function generateStaticParams(): { slug: string }[] {
+export function generateStaticParams(): { lang: string; slug: string }[] {
+  // Blog is currently only in English
   return blog.getPages().map((page) => ({
+    lang: "en",
     slug: page.slugs[0],
   }));
 }

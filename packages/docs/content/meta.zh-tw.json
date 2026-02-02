@@ -1,0 +1,23 @@
+{
+  "root": true,
+  "pages": [
+    "---Zod 4---",
+    "v4/index",
+    "v4/changelog",
+    "---文件---",
+    "index",
+    "basics",
+    "api",
+    "error-customization",
+    "error-formatting",
+    "metadata",
+    "json-schema",
+    "codecs",
+    "ecosystem",
+    "library-authors",
+    "---套件---",
+    "packages/zod",
+    "packages/mini",
+    "packages/core"
+  ]
+}

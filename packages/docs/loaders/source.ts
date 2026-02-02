@@ -1,4 +1,5 @@
 import { blogPosts, docs } from "@/.source";
+import { i18n } from "@/lib/i18n";
 import { loader } from "fumadocs-core/source";
 import { createMDXSource } from "fumadocs-mdx";
 import { icons } from "lucide-react";
@@ -9,6 +10,7 @@ import { createElement } from "react";
 export const source = loader({
   baseUrl: "/",
   source: docs.toFumadocsSource(),
+  i18n,
   icon(icon) {
     if (!icon) {
       // You may set a default icon

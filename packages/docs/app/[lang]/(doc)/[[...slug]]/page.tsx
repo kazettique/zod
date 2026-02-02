@@ -1,6 +1,7 @@
 import { CopyMarkdownButton } from "@/components/copy-markdown-button";
 import { Heading } from "@/components/heading";
 import { Tabs } from "@/components/tabs";
+import { i18n, type Locale } from "@/lib/i18n";
 import { getLLMText } from "@/loaders/get-llm-text";
 import { source } from "@/loaders/source";
 import { Callout } from "fumadocs-ui/components/callout";
@@ -13,10 +14,10 @@ export const revalidate = 86400;
 export const dynamic = "force-static";
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ lang: string; slug?: string[] }>;
 }) {
   const params = await props.params;
-  const page = source.getPage(params.slug);
+  const page = source.getPage(params.slug, params.lang as Locale);
   if (!page) notFound();
 
   const title = page.data.title;
@@ -72,20 +73,25 @@ export default async function Page(props: {
   );
 }
 
-export async function generateStaticParams() {
-  return source.generateParams();
+export function generateStaticParams() {
+  return source.generateParams().map((params) => ({
+    lang: params.lang,
+    slug: params.slug,
+  }));
 }
 
 export async function generateMetadata(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ lang: string; slug?: string[] }>;
 }) {
   const params = await props.params;
-  const page = source.getPage(params.slug);
+  const page = source.getPage(params.slug, params.lang as Locale);
   if (!page) notFound();
 
   const rootTitle = page.data.title ?? "Home";
   const title = rootTitle + " | Zod";
   const description = page.data.description;
+  const langPrefix = params.lang === i18n.defaultLanguage ? "" : `/${params.lang}`;
+
   return {
     title,
     description,
@@ -94,7 +100,7 @@ export async function generateMetadata(props: {
       title,
       description,
       siteName: "Zod",
-      url: `https://zod.dev/${page.slugs.join("/")}`,
+      url: `https://zod.dev${langPrefix}/${page.slugs.join("/")}`,
       images: [
         {
           url: `/og.png?title=${encodeURIComponent(rootTitle)}&description=${encodeURIComponent(description ?? "")}&path=${encodeURIComponent(`${["zod.dev", ...page.slugs].join("/")}`)}`,
