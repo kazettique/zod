@@ -1,0 +1,74 @@
+---
+title: Zod
+description: "Zod 函式庫的內部與結構"
+---
+
+`zod/v4` 套件是 Zod 生態系統的「旗艦」函式庫。它在開發者體驗與套件打包檔案大小之間取得平衡，是絕大多數應用程式的理想選擇。
+
+> 若對打包檔案大小有非常嚴格的限制，請考慮 [Zod Mini](/packages/mini)。
+
+Zod 旨在提供一對一映射到 TypeScript 型別系統的架構 API。
+
+```ts
+import * as z from "zod";
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number().int().positive(),
+  email: z.email(),
+});
+```
+
+API 依賴方法來提供簡潔、可串聯、方便自動完成（autocomplete）的方式來定義複雜的型別。
+
+```ts
+z.string()
+  .min(5)
+  .max(10)
+  .toLowerCase();
+```
+
+所有架構都繼承自 `z.ZodType` 基礎類別，而 `z.ZodType` 基礎類別又繼承自 [`zod/v4/core`](/packages/core) 中的 `z.$ZodType`。所有 `ZodType` 的實例都實作下列方法：
+
+```ts
+import * as z from "zod";
+
+const mySchema = z.string();
+
+// parsing
+mySchema.parse(data);
+mySchema.safeParse(data);
+mySchema.parseAsync(data);
+mySchema.safeParseAsync(data);
+
+
+// refinements
+mySchema.refine(refinementFunc);
+mySchema.superRefine(refinementFunc); // deprecated, use `.check()`
+mySchema.overwrite(overwriteFunc);
+
+// wrappers
+mySchema.optional();
+mySchema.nonoptional();
+mySchema.nullable();
+mySchema.nullish();
+mySchema.default(defaultValue);
+mySchema.array();
+mySchema.or(otherSchema);
+mySchema.transform(transformFunc);
+mySchema.catch(catchValue);
+mySchema.pipe(otherSchema);
+mySchema.readonly();
+
+// metadata and registries
+mySchema.register(registry, metadata);
+mySchema.describe(description);
+mySchema.meta(metadata);
+
+// utilities
+mySchema.check(checkOrFunction);
+mySchema.clone(def);
+mySchema.brand<T>();
+mySchema.isOptional(); // boolean
+mySchema.isNullable(); // boolean
+```

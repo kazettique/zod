@@ -15,7 +15,7 @@ Progress: 9 / 14
 - [ ] packages
   - [ ] core.mdx
   - [ ] mini.mdx
-  - [ ] zod.mdx
+  - [x] zod.mdx
 - [x] api.mdx
 - [x] basics.mdx
 - [x] codecs.mdx
