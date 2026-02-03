@@ -1,0 +1,459 @@
+---
+title: Zod Core
+description: "Zod Core 套件 - 以最小核心函式功能自訂實作"
+---
+
+import { Callout } from "fumadocs-ui/components/callout"
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+這個子套件匯出 Zod 和 Zod Mini 使用的核心類別和工具程式。本套件不建議直接使用，而是供其他套件擴充使用。它實作了：
+
+```ts
+import * as z from "zod/v4/core";
+
+// the base class for all Zod schemas
+z.$ZodType;
+
+// subclasses of $ZodType that implement common parsers
+z.$ZodString
+z.$ZodObject
+z.$ZodArray
+// ...
+
+// the base class for all Zod checks
+z.$ZodCheck;
+
+// subclasses of $ZodCheck that implement common checks
+z.$ZodCheckMinLength
+z.$ZodCheckMaxLength
+
+// the base class for all Zod errors
+z.$ZodError;
+
+// issue formats (types only)
+{} as z.$ZodIssue;
+
+// utils
+z.util.isValidJWT(...);
+```
+
+## 架構
+
+所有 Zod 架構的基礎類別都是 `$ZodType`。它接受兩個泛型參數：`Output` 和 `Input`。
+
+```ts
+export class $ZodType<Output = unknown, Input = unknown> {
+  _zod: { /* internals */}
+}
+```
+
+`zod/v4/core` 匯出了許多實作一些常見解析器的子類別，所有第一方子類別的聯集型別會匯出為 `z.$ZodTypes`。
+
+```ts
+export type $ZodTypes =
+  | $ZodString
+  | $ZodNumber
+  | $ZodBigInt
+  | $ZodBoolean
+  | $ZodDate
+  | $ZodSymbol
+  | $ZodUndefined
+  | $ZodNullable
+  | $ZodNull
+  | $ZodAny
+  | $ZodUnknown
+  | $ZodNever
+  | $ZodVoid
+  | $ZodArray
+  | $ZodObject
+  | $ZodUnion // $ZodDiscriminatedUnion 繼承自此
+  | $ZodIntersection
+  | $ZodTuple
+  | $ZodRecord
+  | $ZodMap
+  | $ZodSet
+  | $ZodLiteral
+  | $ZodEnum
+  | $ZodPromise
+  | $ZodLazy
+  | $ZodOptional
+  | $ZodDefault
+  | $ZodTemplateLiteral
+  | $ZodCustom
+  | $ZodTransform
+  | $ZodNonOptional
+  | $ZodReadonly
+  | $ZodNaN
+  | $ZodPipe // $ZodCodec 繼承自此
+  | $ZodSuccess
+  | $ZodCatch
+  | $ZodFile;
+```
+
+<Accordions>
+<Accordion title="Inheritance diagram">
+  以下是核心架構類別的完整繼承架構圖：
+  ```txt
+  - $ZodType
+      - $ZodString
+          - $ZodStringFormat
+              - $ZodGUID
+              - $ZodUUID
+              - $ZodEmail
+              - $ZodURL
+              - $ZodEmoji
+              - $ZodNanoID
+              - $ZodCUID
+              - $ZodCUID2
+              - $ZodULID
+              - $ZodXID
+              - $ZodKSUID
+              - $ZodISODateTime
+              - $ZodISODate
+              - $ZodISOTime
+              - $ZodISODuration
+              - $ZodIPv4
+              - $ZodIPv6
+              - $ZodCIDRv4
+              - $ZodCIDRv6
+              - $ZodBase64
+              - $ZodBase64URL
+              - $ZodE164
+              - $ZodJWT
+      - $ZodNumber
+          - $ZodNumberFormat
+      - $ZodBigInt
+          - $ZodBigIntFormat
+      - $ZodBoolean
+      - $ZodSymbol
+      - $ZodUndefined
+      - $ZodNull
+      - $ZodAny
+      - $ZodUnknown
+      - $ZodNever
+      - $ZodVoid
+      - $ZodDate
+      - $ZodArray
+      - $ZodObject
+      - $ZodUnion
+          - $ZodDiscriminatedUnion
+      - $ZodIntersection
+      - $ZodTuple
+      - $ZodRecord
+      - $ZodMap
+      - $ZodSet
+      - $ZodEnum
+      - $ZodLiteral
+      - $ZodFile
+      - $ZodTransform
+      - $ZodOptional
+      - $ZodNullable
+      - $ZodDefault
+      - $ZodPrefault
+      - $ZodNonOptional
+      - $ZodSuccess
+      - $ZodCatch
+      - $ZodNaN
+      - $ZodPipe
+          - $ZodCodec
+      - $ZodReadonly
+      - $ZodTemplateLiteral
+      - $ZodCustom
+
+      ```
+</Accordion>
+</Accordions>
+
+## 內部結構
+
+所有 `zod/v4/core` 子類別只包含單一的屬性：`_zod`。這個屬性是一個包含架構*內部*的物件。我們的目標是讓 `zod/v4/core` 盡可能的可擴充且不帶偏見。其他函式庫可以在這些類別之上「建立他們自己的 Zod」，而不會讓 `zod/v4/core` 的介面變得雜亂無章。有關如何擴充這些類別的範例，請參考 `zod` 和 `zod/mini` 的實作。
+
+`_zod` 內部屬性包含一些值得注意的屬性：
+
+- `.def` - 結構描述的*定義*：這是您傳送給類別建構式以建立實例的物件，它完整地描述了整個架構，並且是可序列化的 JSON。
+  - `.def.type` - 表示架構類型的字串，例如：`"string"`、`"object"`、`"array"`等。
+  - `.def.checks` - 架構在解析後執行的*驗證*陣列。
+- `.input` - 虛擬屬性，「儲存」架構的*輸入值型別推論*。
+- `.output` - 虛擬屬性，「儲存」架構的*輸出型別推論*。
+- `.run()` - 架構的內部解析器實作。
+
+若要實作一個必須遍歷 Zod 架構的工具（例如：程式碼產生器），可以將任何架構轉換為 `$ZodTypes` 並使用 `def` 屬性來區分這些類別。
+
+```ts
+export function walk(_schema: z.$ZodType) {
+  const schema = _schema as z.$ZodTypes;
+  const def = schema._zod.def;
+  switch (def.type) {
+    case "string": {
+      // ...
+      break;
+    }
+    case "object": {
+      // ...
+      break;
+    }
+  }
+}
+```
+
+有許多 `$ZodString` 的子類別可以實作各種*字串格式*，其輸出為 `z.$ZodStringFormatTypes`。
+
+```ts
+export type $ZodStringFormatTypes =
+  | $ZodGUID
+  | $ZodUUID
+  | $ZodEmail
+  | $ZodURL
+  | $ZodEmoji
+  | $ZodNanoID
+  | $ZodCUID
+  | $ZodCUID2
+  | $ZodULID
+  | $ZodXID
+  | $ZodKSUID
+  | $ZodISODateTime
+  | $ZodISODate
+  | $ZodISOTime
+  | $ZodISODuration
+  | $ZodIPv4
+  | $ZodIPv6
+  | $ZodCIDRv4
+  | $ZodCIDRv6
+  | $ZodBase64
+  | $ZodBase64URL
+  | $ZodE164
+  | $ZodJWT
+```
+
+
+## 解析
+
+由於 Zod Core 架構類別沒有方法，因此由頂層函式來解析資料。
+
+```ts
+import * as z from "zod/v4/core";
+
+const schema = new z.$ZodString({ type: "string" });
+z.parse(schema, "hello");
+z.safeParse(schema, "hello");
+await z.parseAsync(schema, "hello");
+await z.safeParseAsync(schema, "hello");
+```
+
+
+## 檢查
+
+每個 Zod 架構都包含一個*檢查*陣列，這些會執行解析後的精煉（偶爾也會進行資料竄改），但*不會影響*型別推論。
+
+```ts
+const schema = z.string().check(z.email()).check(z.min(5));
+// => $ZodString
+
+schema._zod.def.checks;
+// => [$ZodCheckEmail, $ZodCheckMinLength]
+```
+
+所有 Zod 檢查的基礎類別是 `$ZodCheck`。它接受單一具泛型的參數 `T`。
+
+```ts
+export class $ZodCheck<in T = unknown> {
+  _zod: { /* internals */}
+}
+```
+
+`_zod` 內部屬性包含一些值得注意的屬性：
+
+- `.def` - 檢查的*定義*:這是傳入類別的建構式以建立檢查的物件，其完整地描述了檢查，而且是可序列化的 JSON。
+  - `.def.check` - 代表檢查類型的字串，例如：`"min_length"`、`"less_than"`、`"string_format"`等。
+- `.check()` - 包含檢查的驗證邏輯。
+
+`zod/v4/core` 匯出了許多執行一些常見精煉的子類別。所有第一方的子類都匯出為一個稱為 `z.$ZodChecks` 的聯集型別。
+
+```ts
+export type $ZodChecks =
+  | $ZodCheckLessThan
+  | $ZodCheckGreaterThan
+  | $ZodCheckMultipleOf
+  | $ZodCheckNumberFormat
+  | $ZodCheckBigIntFormat
+  | $ZodCheckMaxSize
+  | $ZodCheckMinSize
+  | $ZodCheckSizeEquals
+  | $ZodCheckMaxLength
+  | $ZodCheckMinLength
+  | $ZodCheckLengthEquals
+  | $ZodCheckProperty
+  | $ZodCheckMimeType
+  | $ZodCheckOverwrite
+  | $ZodCheckStringFormat
+```
+
+
+可使用 `._zod.def.check` 屬性來區分這些類別：
+
+```ts
+const check = {} as z.$ZodChecks;
+const def = check._zod.def;
+
+switch (def.check) {
+  case "less_than":
+  case "greater_than":
+    // ...
+    break;
+}
+```
+
+
+如同架構類型一樣，`$ZodCheckStringFormat` 擁有許多子類別，可以實作各種*字串格式*：
+
+```ts
+export type $ZodStringFormatChecks =
+  | $ZodCheckRegex
+  | $ZodCheckLowerCase
+  | $ZodCheckUpperCase
+  | $ZodCheckIncludes
+  | $ZodCheckStartsWith
+  | $ZodCheckEndsWith
+  | $ZodGUID
+  | $ZodUUID
+  | $ZodEmail
+  | $ZodURL
+  | $ZodEmoji
+  | $ZodNanoID
+  | $ZodCUID
+  | $ZodCUID2
+  | $ZodULID
+  | $ZodXID
+  | $ZodKSUID
+  | $ZodISODateTime
+  | $ZodISODate
+  | $ZodISOTime
+  | $ZodISODuration
+  | $ZodIPv4
+  | $ZodIPv6
+  | $ZodCIDRv4
+  | $ZodCIDRv6
+  | $ZodBase64
+  | $ZodBase64URL
+  | $ZodE164
+  | $ZodJWT;
+```
+
+
+使用巢狀的 `switch` 來區別不同的字串格式檢查：
+
+```ts
+const check = {} as z.$ZodChecks;
+const def = check._zod.def;
+
+switch (def.check) {
+  case "less_than":
+  case "greater_than":
+  // ...
+  case "string_format":
+    {
+      const formatCheck = check as z.$ZodStringFormatChecks;
+      const formatCheckDef = formatCheck._zod.def;
+
+      switch (formatCheckDef.format) {
+        case "email":
+        case "url":
+          // do stuff
+      }
+    }
+    break;
+}
+```
+
+您會發現這些字串格式*檢查*與上面的字串格式*型別*重疊，這是因為這些類別同時實作了 `$ZodCheck` 和 `$ZodType` 介面。意即它們既可以作為檢查，也可以作為型別。在這些情況下，`._zod.parse`（架構解析器）和`._zod.check`（檢查驗證）都會在解析時執行。實際上，這個實例會被預先加入它自己的 `checks` 陣列（雖然它實際上不會存在於 `._zod.def.checks`）。
+
+```ts
+// as a type
+z.email().parse("user@example.com");
+
+// as a check
+z.string().check(z.email()).parse("user@example.com")
+```
+
+## 錯誤
+
+Zod 中所有錯誤的基礎類別是 `$ZodError`。
+
+> 基於效能考量，`$ZodError` *不會*繼承內建的 `Error` 類別！所以使用 `instanceof Error` 會回傳 `false`。
+
+- `zod` 套件實作了 `$ZodError` 的子類別，稱做 `ZodError`，並加上一些額外的便利方法。
+- `zod/mini` 子套件直接使用 `$ZodError`。
+
+```ts
+export class $ZodError<T = unknown> implements Error {
+ public issues: $ZodIssue[];
+}
+```
+
+## 驗證訊息（Issues）
+
+`issues` 屬性對應到 `$ZodIssue` 物件的陣列。所有的驗證訊息都會繼承自 `z.$ZodIssueBase` 介面。
+
+```ts
+export interface $ZodIssueBase {
+  readonly code?: string;
+  readonly input?: unknown;
+  readonly path: PropertyKey[];
+  readonly message: string;
+}
+```
+
+Zod 定義了下列問題子類型：
+
+```ts
+export type $ZodIssue =
+  | $ZodIssueInvalidType
+  | $ZodIssueTooBig
+  | $ZodIssueTooSmall
+  | $ZodIssueInvalidStringFormat
+  | $ZodIssueNotMultipleOf
+  | $ZodIssueUnrecognizedKeys
+  | $ZodIssueInvalidUnion
+  | $ZodIssueInvalidKey
+  | $ZodIssueInvalidElement
+  | $ZodIssueInvalidValue
+  | $ZodIssueCustom;
+  ```
+
+有關各型別的詳細資訊，請參閱[實作](https://github.com/colinhacks/zod/blob/main/packages/zod/src/v4/core/errors.ts)。
+
+
+{/* ## Best practices
+
+If you're reading this page, you're likely trying to build some kind of tool or library on top of Zod. This section breaks down some best practices for doing so.
+
+1. If you're just accept user-defined schemas, use Standard Schema instead
+
+Zod implements the [Standard Schema](https://standardschema.dev/) specification, a standard interface for schema libraries to expose their validation logic and inferred types to third-party tools. If your goal is to accept user-defined schemas, extracting their inferred types, and using them to parse data, then Standard Schema is all you need. Refer to the Standard Schema website/docs for more information.
+
+2. Set up `peerDependencies` properly!
+
+If your tool accepts Zod schemas from a consumer/user, you should add `"zod/v4/core"` to `peerDependencies`. This lets your users "bring their own Zod". Be as flexible as possible with the version range. For example, if your tool is compatible with `zod/v4/core`, you can use the following. This allows your users to bring any version of `zod/v4/core`, avoiding accidental duplicate installs.
+
+
+```json
+{
+  "peerDependencies": {
+    "zod/v4/core": "*"
+  }
+}
+```
+
+Since package managers generally won't install your own `peerDependencies`, you'll need to add `zod/v4/core` to your `devDependencies` as well. As new versions of `zod/v4/core` are released, you can update your `devDependencies` to match the latest version. This is important for testing and development purposes.
+
+```json
+{
+  "peerDependencies": {
+    "zod": "*"
+  },
+  "devDependencies": {
+    "zod": "^3.25.0"
+  }
+}
+``` */}
+
