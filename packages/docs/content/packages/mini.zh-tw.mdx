@@ -1,0 +1,239 @@
+---
+title: Zod Mini
+description: "Zod Mini - 可樹搖優化的 Zod"
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info">
+  **Note** - Zod Mini 的說明文件透過標籤式的程式碼區塊與一般 Zod 的說明文件同列。本頁旨在解釋為何 Zod Mini 會存在、何時該使用它，以及與一般 Zod 的一些主要差異。
+</Callout>
+
+Zod Mini 變體隨 Zod 4 推出，請先安裝：
+
+```sh
+npm install zod@^4.0.0
+```
+
+引入 Zod Mini
+
+```ts
+import * as z from "zod/mini";
+```
+
+Zod Mini 實作與 `zod` 完全相同的功能，但使用的是*函式*且*可樹搖優化的* API。若您以往使用 `zod`，這表示您將以*函式*來取代方法。
+
+```ts
+// regular Zod
+const mySchema = z.string().optional().nullable();
+
+// Zod Mini
+const mySchema = z.nullable(z.optional(z.string()));
+```
+
+## 樹搖優化（Tree-shaking）
+
+樹搖優化是現代程式打包時使用的一種技術，用來移除最終打包程式中未使用的程式碼。它也被稱為*死代碼消除（dead-code elimination）*。
+
+在正規的 Zod 中，架構提供了一系列的便利方法來執行一些常見的操作（例如：字串架構中的 `.min()` 方法），打包工具通常無法從中移除（「樹搖」，treeshake）未使用的方法，但他們能夠移除未使用的頂層函式。因此，Zod Mini 的 API 使用的函式多於方法。
+
+```ts
+// regular Zod
+z.string().min(5).max(10).trim()
+
+// Zod Mini
+z.string().check(z.minLength(5), z.maxLength(10), z.trim());
+```
+
+為讓您對打包瘦身的效果有大致的了解，用以下範例來說明：
+
+```ts
+z.boolean().parse(true)
+```
+
+以下是 Zod 與 Zod Mini 打包後的檔案大小，Zod Mini 可減少 64%。
+
+| 套件 | 打包尺寸 (gzip) |
+|---------|-------------|
+| Zod Mini | `2.12kb` |
+| Zod | `5.91kb` |
+
+若是稍具複雜度的架構，涉及物件型別：
+
+```ts
+const schema = z.object({ a: z.string(), b: z.number(), c: z.boolean() });
+
+schema.parse({
+  a: "asdf",
+  b: 123,
+  c: true,
+});
+```
+
+| 套件 | 打包尺寸 (gzip) |
+|---------|-------------|
+| Zod Mini | `4.0kb` |
+| Zod | `13.1kb` |
+
+這可讓您對打包尺寸的差異有點概念。請仔細觀察這些數字，並依照自己的基準來決定使用 Zod Mini 是否值得。
+
+## 何時（不）使用 Zod Mini
+
+一般而言，除非對打包尺寸有非常嚴格的限制，使用一般的 Zod 就行了。許多開發人員高估了打包尺寸對應用程式效能的重要性。實際上，Zod 的打包尺寸（基本上是 `5-10kb`），唯獨針對為鄉間、開發中地區之網路連線緩慢的使用者族群，做最佳化前端打包檔案時才有效益。
+
+讓我們來看看一些注意事項：
+
+### 開發者體驗（DX）
+
+Zod Mini 的 API 較為冗長且難以尋找。Zod API 中的方法比 Zod Mini 的頂層函式更容易透過智慧偵測（Intellisense）來發現與自動完成（autocomplete）。使用串聯式的 API 較難快速建立架構。（身為 Zod 的創造者，我花了很多時間設計 Zod：我花了很多時間設計 Zod Mini API 使之易於使用，但我仍然偏好標準的 Zod API）。
+
+### 後端開發
+
+若在後端使用 Zod，Zod 打包尺寸就沒意義了。即使在 Lambda 等資源受限的環境中亦是如此。[這篇文章](https://medium.com/@adtanasa/size-is-almost-allthat-matters-for-optimizing-aws-lambda-cold-starts-cad54f65cbb)跑分測試了各種大小的打包尺寸之冷啟動時間。以下是部分結果：
+
+| 打包尺寸 | Lambda 冷啟動時間 |
+|-------------|----------------|
+| `1kb` | `171ms` |
+| `17kb` (gzipped 壓縮後的非 Mini Zod 檔案尺寸) | `171.6ms` (interpolated) |
+| `128kb` | `176ms` |
+| `256kb` | `182ms` |
+| `512kb` | `279ms` |
+| `1mb` | `557ms` |
+
+可忽略不計的 `1kb` 打包尺寸，其最短冷啟動時間為 `171ms`。下一個測試的打包尺寸是 `128kb`，只增加了 `5ms`。當 gzip 壓縮時，標準版 Zod 的其打包尺寸約是 `17kb`，相對應之啟動時間增加了 `0.6ms`。
+
+### 網路速度
+
+一般而言，至伺服器的往返時間（`100-200ms`），會讓下載額外 `10kb` 所需的時間相形見拙。只有在慢速 3G 連線（速度低於 `1Mbps`）的情況下，額外 `10kb` 的下載時間才會變得格外重要。若不是特別針對鄉村或發展中地區的使用者進行最佳化，最好花時間在其他方面的優化上。
+
+## `ZodMiniType`
+
+所有的 Zod Mini 架構都繼承自 `z.ZodMiniType` 基礎類別，而 `z.ZodMiniType` 基礎類別又繼承了自 [`zod/v4/core`](/packages/core) 的 `z.core.$ZodType`。雖然這個類別實作的方法遠比 `zod` 中的 `ZodType` 少，但仍保留了一些特別有用的方法。
+
+
+### `.parse`
+
+很明顯地，所有 Zod Mini 架構皆與 `zod` 一樣擁有解析方法。
+
+```ts
+import * as z from "zod/mini"
+
+const mySchema = z.string();
+
+mySchema.parse('asdf')
+await mySchema.parseAsync('asdf')
+mySchema.safeParse('asdf')
+await mySchema.safeParseAsync('asdf')
+```
+
+### `.check()`
+
+在標準版 Zod 中，架構子類別有專用的方法來執行一般檢查：
+
+```ts
+import * as z from "zod";
+
+z.string()
+  .min(5)
+  .max(10)
+  .refine(val => val.includes("@"))
+  .trim()
+```
+
+在 Zod Mini 中並沒有實作這些方法。取而代之，您可以使用 `.check()` 方法將這些檢查傳入架構：
+
+```ts
+import * as z from "zod/mini"
+
+z.string().check(
+  z.minLength(5), 
+  z.maxLength(10),
+  z.refine(val => val.includes("@")),
+  z.trim()
+);
+```
+
+執行下列檢查。有些檢查只適用於某些型別的架構（例如：字串或數值）。API 都是具強型別的；TypeScript 不會允許在構架中輸入不支援的型別。
+
+```ts
+z.lt(value);
+z.lte(value); // alias: z.maximum()
+z.gt(value);
+z.gte(value); // alias: z.minimum()
+z.positive();
+z.negative();
+z.nonpositive();
+z.nonnegative();
+z.multipleOf(value);
+z.maxSize(value);
+z.minSize(value);
+z.size(value);
+z.maxLength(value);
+z.minLength(value);
+z.length(value);
+z.regex(regex);
+z.lowercase();
+z.uppercase();
+z.includes(value);
+z.startsWith(value);
+z.endsWith(value);
+z.property(key, schema);
+z.mime(value);
+
+// 自定義驗證邏輯
+z.refine()
+z.check()   // 取代 .superRefine()
+
+// 竄改（這些竄改不會改變推論型別）
+z.overwrite(value => newValue);
+z.normalize();
+z.trim();
+z.toLowerCase();
+z.toUpperCase();
+```
+
+### `.register()`
+
+用於註冊至[註冊表](/metadata#registries)中的架構。
+
+```ts
+const myReg = z.registry<{title: string}>();
+
+z.string().register(myReg, { title: "My cool string schema" });
+```
+
+### `.brand()`
+
+用於*品牌*架構。更多資訊請參考[品牌型別](/api#branded-types)相關文件。
+
+```ts
+import * as z from "zod/mini"
+
+const USD = z.string().brand("USD");
+```
+
+
+### `.clone(def)`
+
+使用 `def` 回傳一份複製的當前架構。
+
+```ts
+const mySchema = z.string()
+
+mySchema.clone(mySchema._zod.def);
+```
+
+## 無預設語言
+
+標準版 Zod 會自動載入英文（`en`），而 Zod Mini 則不會。這可在不需要錯誤訊息、本地化為非英文語言或其他自訂的情況下，減少打包尺寸。
+
+這表示在預設情況下，所有問題的 `message` 屬性將只讀取 `"Invalid input"`。載入英文區域：
+
+```ts
+import * as z from "zod/mini"
+
+z.config(z.locales.en());
+```
+
+有關本地化的詳細資訊，請參閱[多國語言](/error-customization#internationalization) 文件。

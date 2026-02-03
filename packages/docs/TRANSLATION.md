@@ -10,17 +10,17 @@ If you want to make contribute to the project, please let me know.
 
 ### Traditional Chinese
 
-Progress: 9 / 14
+Progress: 13 / 14
 
 - [ ] packages
   - [ ] core.mdx
-  - [ ] mini.mdx
+  - [x] mini.mdx
   - [x] zod.mdx
 - [x] api.mdx
 - [x] basics.mdx
 - [x] codecs.mdx
 - [ ] ecosystem.mdx
-- [x] error-customization.mdx
+- [ ] error-customization.mdx
 - [x] error-formatting.mdx
 - [x] index.mdx
 - [x] json-schema.mdx
