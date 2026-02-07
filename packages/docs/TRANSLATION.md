@@ -10,9 +10,9 @@ If you want to make contribute to the project, please let me know.
 
 ### Traditional Chinese
 
-Progress: 13 / 14
+Progress: 14 / 14
 
-- [ ] packages
+- [x] packages
   - [x] core.mdx
   - [x] mini.mdx
   - [x] zod.mdx

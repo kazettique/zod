@@ -1,5 +1,5 @@
 ---
-title: "元資料（metadata）和註冊（registries）"
+title: "元資料和註冊"
 description: "在 Zod 架構上附加並處理元資料"
 ---
 
@@ -8,11 +8,11 @@ import { Callout } from "fumadocs-ui/components/callout"
 
 {/* > Zod 4+ provides native `.toJSONSChema()` functionality that leverages registries to generate idiomatic JSON Schema from Zod. Refer to the [JSON SChema docs](/json-schema) page for more information. */}
 
-It's often useful to associate a schema with some additional *metadata* for documentation, code generation, AI structured outputs, form validation, and other purposes.
+為了文件化、程式碼生成、AI 結構輸出、表單驗證以及其他目的，將架構與一些額外的*元資料*相關聯通常是有很有幫助的。
 
-## 註冊（Registries）
+## 註冊
 
-Zod 的元資料（metadata）是透過註冊（*registries*）來處理的。註冊是架構的集合，每個架構都與一些*強型別*的元資料相關聯。欲建立一個簡單的註冊表：
+Zod 的元資料（metadata）是透過*註冊*來處理的。註冊是架構的集合，每個架構都與一些*強型別*的元資料相關聯。欲建立一個簡單的註冊表：
 
 ```ts
 import * as z from "zod";

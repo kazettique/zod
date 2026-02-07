@@ -91,17 +91,17 @@ import * as z4 from "zod/v4/core";
 - `"zod/v3"` 為 Zod 3 版本 ✅
 - `"zod/v4/core"` 為 Zod 4 核心版（Core）套件 ✅
 
-一般而言，您不應該從任何其他路徑匯入。Zod 核心版（Core）函式庫是 Zod 4 標準版（Classic）和 Zod 4 精簡版（Mini）的共用函式庫。一般而言，並不建議實作任何特別針對某一方的函式。請勿從這些子路徑匯入：
+一般而言，您不應該從任何其他路徑匯入。Zod 核心版（Core）函式庫是 Zod 4 標準版（Classic）和 Zod 4 Mini 的共用函式庫。一般而言，並不建議實作任何特別針對某一方的函式。請勿從這些子路徑匯入：
 
 - `"zod"` — ❌ 在 3.x 版本中，這會匯出 Zod 3。在 4.x 版本中，這將匯出 Zod 4。請改用永久連結。
-- `"zod/v4"` 和 `"zod/v4/mini"`- ❌ 這些子路徑分別是 Zod 4 標準版和精簡版的位置。若您希望函式庫能同時使用 Zod 和 Zod 精簡版，您應該依 `"zod/v4/core"` 中定義的基本類別來建立。若您引用了 `"zod/v4"` 模組中的類別，函式庫將無法在 Zod 精簡版上運行，反之亦然，所以我們並不鼓勵此舉。請改用 `"zod/v4/core"`，它會輸出由 Zod 標準版和 Zod 精簡版繼承而來，具有錢字號（`$`）前綴字的子類別。經典與精簡的子類別的內部是基本上相同的，差別只在於它們實作了哪些輔助方法。
+- `"zod/v4"` 和 `"zod/v4/mini"`- ❌ 這些子路徑分別是 Zod 4 標準版和Mini的位置。若您希望函式庫能同時使用 Zod 和 Zod Mini，您應該依 `"zod/v4/core"` 中定義的基本類別來建立。若您引用了 `"zod/v4"` 模組中的類別，函式庫將無法在 Zod Mini 上運行，反之亦然，所以我們並不鼓勵此舉。請改用 `"zod/v4/core"`，它會輸出由 Zod 標準版和 Zod Mini 繼承而來，具有錢字號（`$`）前綴字的子類別。經典與精簡的子類別的內部是基本上相同的，差別只在於它們實作了哪些輔助方法。
 
 
 ## 我需要發佈新的大版號嗎？
 
-答案是「不」，您不需要為了支援 Zod 4 而發佈新的主要版本函式庫（除非您要放棄對 Zod 3 的支援，但不建議這樣做）。
+答案是「不」，您不需要為了支援 Zod 4 而發佈新的大版號（除非您要放棄對 Zod 3 的支援，但不建議這樣做）。
 
-您需要將對等依賴升級到 `^3.25.0`，因此使用者將需要用 `npm upgrade zod` 進行升版。但在 `zod@3.24` 和 `zod@3.25` 之間，Zod 3 並沒有巨大變動；事實上，沒有任何程式碼的改變。由於使用者需要修改程式碼，我不認為這構成巨大變動。因此我不建議發佈新的大版號。
+您需要將對等依賴（peer dependencies）升級至 `^3.25.0`，因此使用者將需要用 `npm upgrade zod` 進行升版。但在 `zod@3.24` 和 `zod@3.25` 之間，Zod 3 並沒有巨大變動；事實上，沒有任何程式碼的改變。由於使用者需要修改程式碼，我不認為這構成巨大變動。因此我不建議發佈新的大版號。
 
 ## 如何同時支援 Zod 3 和 Zod 4？
 
@@ -133,9 +133,9 @@ if ("_zod" in schema) {
 }
 ```
 
-## 如何同時支援 Zod 和 Zod 精簡版（Mini）？
+## 如何同時支援 Zod 和 Zod Mini？
 
-您的函式庫程式碼應該只從 `"zod/v4/core"`匯入。這個子套件定義了 Zod 和 Zod 精簡版共用的介面、類別和工具函式。
+您的函式庫程式碼應該只從 `"zod/v4/core"`匯入。這個子套件定義了 Zod 和 Zod Mini 共用的介面、類別和工具函式。
 
 ```ts
 // library code
@@ -149,7 +149,7 @@ export function acceptObjectSchema<T extends z4.$ZodObject>(schema: T){
 }
 ```
 
-透過使用共用的基礎介面，可以同時可靠地支援兩個子套件。此函式可同時接受 Zod 與 Zod 精簡版的架構。
+透過使用共用的基礎介面，可以同時可靠地支援兩個子套件。此函式可同時接受 Zod 與 Zod Mini 的架構。
 
 ```ts
 // user code
@@ -254,7 +254,7 @@ inferSchema(z.number());
 // // Type 'number' is not assignable to type 'string'
 ```
 
-若要使用架構解析資料，請使用頂層的 `z4.parse` / `z4.safeParse` / `z4.parseAsync` / `z4.safeParseAsync` 函式。`z4.$ZodType` 子類別上沒有任何方法。資料解析的方法實作在 Zod 和 Zod 精簡版，而不在 Zod 核心套件當中。
+若要使用架構解析資料，請使用頂層的 `z4.parse` / `z4.safeParse` / `z4.parseAsync` / `z4.safeParseAsync` 函式。`z4.$ZodType` 子類別上沒有任何方法。資料解析的方法實作在 Zod 和 Zod Mini，而不在 Zod 核心套件當中。
 
 ```ts
 function parseData<T extends z4.$ZodType>(data: unknown, schema: T): z4.output<T> {
