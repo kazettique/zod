@@ -219,9 +219,9 @@ result.error.issues;
 // [{ message: "highest priority", ... }]
 ```
 
-The `iss` object is a [discriminated union](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions) of all possible issue types. Use the `code` property to discriminate between them.
+`iss` 物件是所有可能的問題之[區別聯集型別](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)，使用 `code` 屬性來區分它們。
 
-> For a breakdown of all Zod issue codes, see the [`zod/v4/core`](/packages/core#issue-types) documentation.
+> 關於所有 Zod 問題代碼的細節，請參閱 [`zod/v4/core`](/packages/core#issue-types)文件。
 
 ```ts
 const result = schema.safeParse(12, {
@@ -237,9 +237,9 @@ const result = schema.safeParse(12, {
 });
 ```
 
-### Include input in issues
+### 在驗證問題中納入輸入值
 
-By default, Zod does not include input data in issues. This is to prevent unintentional logging of potentially sensitive input data. To include the input data in each issue, use the `reportInput` flag:
+預設情況下 Zod 不會在問題中包含輸入值，這是為了防止無意間記錄可能敏感的輸入值。若要在每個問題中包含輸入值，請使用 `reportInput` 屬性：
 
 ```ts
 z.string().parse(12, {
@@ -257,9 +257,9 @@ z.string().parse(12, {
 // ]
 ```
 
-## Global error customization
+## 全域的自訂錯誤
 
-To specify a global error map, use `z.config()` to set Zod's `customError` configuration setting:
+若要全域錯誤映射，請使用 `z.config()` 設定 Zod 的 `customError` 配置設定：
 
 ```ts
 z.config({
@@ -269,11 +269,11 @@ z.config({
 });
 ```
 
-Global error messages have *lower precedence* than schema-level or per-parse error messages.
+全域錯誤訊息的*優先序*低於架構層級或每次解析的錯誤訊息。
 
-The `iss` object is a [discriminated union](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions) of all possible issue types. Use the `code` property to discriminate between them.
+`iss` 物件是所有可能問題型別之[區別聯集型別](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)。使用 `code` 屬性來區分它們。
 
-> For a breakdown of all Zod issue codes, see the [`zod/v4/core`](/packages/core#issue-types) documentation.
+> 關於所有 Zod 問題代碼的細目，請參閱 [`zod/v4/core`](/packages/core#issue-types) 文件。
 
 ```ts
 z.config({
@@ -289,11 +289,11 @@ z.config({
 });
 ```
 
-## Internationalization
+## 多語系
 
-To support internationalization of error message, Zod provides several built-in **locales**. These are exported from the `zod/v4/core` package.
+為了支援多語系之錯誤訊息，Zod 提供了幾個內建的語系。這些都是從 `zod/v4/core` 套件匯出的。
 
-> **Note** — The regular `zod` library automatically loads the `en` locale automatically. Zod Mini does not load any locale by default; instead all error messages default to `Invalid input`.
+> **注意** - 標準 `zod` 函式庫會自動載入英語（`en`）語言，Zod Mini 預設不載入任何語系；相反地，所有錯誤訊息預設值為 `Invalid input`。
 
 <Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
 <Tab value="Zod">
@@ -314,7 +314,7 @@ z.config(en());
 </Tab>
 </Tabs>
 
-To lazily load a locale, consider dynamic imports:
+若要延遲載入（lazy load）一個語系，請考慮使用動態匯入：
 
 ```ts
 import * as z from "zod";
@@ -327,7 +327,7 @@ async function loadLocale(locale: string) {
 await loadLocale("fr");
 ```
 
-For convenience, all locales are exported as `z.locales` from `"zod"`. In some bundlers, this may not be tree-shakable.
+為方便起見，所有的語系都從 `zod` 匯出為 `z.locales`。在某些打包工具中，可能無法達成樹搖優化。
 
 <Tabs groupId="lib" items={["Zod", "Zod Mini"]}>
 <Tab value="Zod">
@@ -346,68 +346,68 @@ z.config(z.locales.en());
 </Tab>
 </Tabs>
 
-### Locales
+### 語系包
 
-The following locales are available:
+可使用的語系包如下：
 
-- `ar` — Arabic
-- `az` — Azerbaijani
-- `be` — Belarusian
-- `bg` — Bulgarian
-- `ca` — Catalan
-- `cs` — Czech
-- `da` — Danish
-- `de` — German
-- `en` — English
-- `eo` — Esperanto
-- `es` — Spanish
-- `fa` — Farsi
-- `fi` — Finnish
-- `fr` — French
-- `frCA` — Canadian French
-- `he` — Hebrew
-- `hu` — Hungarian
-- `id` — Indonesian
-- `is` — Icelandic
-- `it` — Italian
-- `ja` — Japanese
-- `ka` — Georgian
-- `km` — Khmer
-- `ko` — Korean
-- `lt` — Lithuanian
-- `mk` — Macedonian
-- `ms` — Malay
-- `nl` — Dutch
-- `no` — Norwegian
-- `ota` — Türkî
-- `ps` — Pashto
-- `pl` — Polish
-- `pt` — Portuguese
-- `ru` — Russian
-- `sl` — Slovenian
-- `sv` — Swedish
-- `ta` — Tamil
-- `th` — Thai
-- `tr` — Türkçe
-- `uk` — Ukrainian
-- `ur` — Urdu
-- `vi` — Tiếng Việt
-- `zhCN` — Simplified Chinese
-- `zhTW` — Traditional Chinese
-- `yo` — Yorùbá
+- `ar` — 阿拉伯語
+- `az` — 亞塞拜然語
+- `be` - 白俄羅斯語
+- `bg` - 保加利亞語
+- `ca` - 加泰羅尼亞語
+- `cs` - 捷克語
+- `da` - 丹麥語
+- `de` - 德語
+- `en` - 英語
+- `eo` - 世界語
+- `es` - 西班牙語
+- `fa` - 波斯語
+- `fi` - 芬蘭語
+- `fr` - 法語
+- `frCA` - 加拿大法語
+- `he` - 希伯來語
+- `hu` - 匈牙利語
+- `id` - 印尼語
+- `is` - 冰島語
+- `it` - 意大利語
+- `ja` - 日語
+- `ka` - 喬治亞語
+- `km` - 高棉語
+- `ko` - 韓語
+- `lt` - 立陶宛語
+- `mk` - 馬其頓語
+- `ms` - 馬來語
+- `nl` - 荷蘭語
+- `no` - 挪威語
+- `ota` - 土耳其語
+- `ps` - 普什圖語
+- `pl` - 波蘭語
+- `pt` - 葡萄牙語
+- `ru` - 俄語
+- `sl` - 斯洛維尼亞語
+- `sv` - 瑞典語
+- `ta` - 坦米爾語
+- `th` - 泰語
+- `tr` - 土耳其語
+- uk` - 烏克蘭語
+- `ur` - 烏爾都語
+- `vi` - 越南語
+- `zhCN` - 簡體中文
+- `zhTW` - 繁體中文
+- `yo` - 約魯巴語
 
 
-## Error precedence
+## 錯誤優先序
 
-Below is a quick reference for determining error precedence: if multiple error customizations have been defined, which one takes priority? From *highest to lowest* priority:
+以下是決定錯誤優先序的快速參考：若已定義了多個自訂錯誤訊息，何者優先？以下是優先序的說明（*從最高至最低*）：
 
-1. **Schema-level error** — Any error message "hard coded" into a schema definition.
+1. **架構層級錯誤** - 任何寫死（hard coded）到架構定義中的錯誤訊息。
 
   ```ts
   z.string("Not a string!");
   ```
 
-2. **Per-parse error** — A custom error map passed into the `.parse()` method.
+2. **每次的解析錯誤** - 傳入 `.parse()` 方法中的自訂錯誤訊息。
 
   ```ts
   z.string().parse(12, {
@@ -415,7 +415,7 @@ Below is a quick reference for determining error precedence: if multiple error c
   });
   ```
 
-3. **Global error map** — A custom error map passed into `z.config()`.
+3. **全域錯誤對照表** - 傳入 `z.config()` 之自訂錯誤對照表。
 
   ```ts
   z.config({
@@ -423,7 +423,7 @@ Below is a quick reference for determining error precedence: if multiple error c
   });
   ```
 
-4. **Locale error map** — A custom error map passed into `z.config()`.
+4.**地方語系之錯誤對照表** - 傳入 `z.config()` 之自訂錯誤對照表。
 
   ```ts
   z.config(z.locales.en());

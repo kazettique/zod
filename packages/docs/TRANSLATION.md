@@ -19,7 +19,7 @@ Progress: 13 / 14
 - [x] api.mdx
 - [x] basics.mdx
 - [x] codecs.mdx
-- [ ] ecosystem.mdx
+- [x] ecosystem.mdx
 - [ ] error-customization.mdx
 - [x] error-formatting.mdx
 - [x] index.mdx
